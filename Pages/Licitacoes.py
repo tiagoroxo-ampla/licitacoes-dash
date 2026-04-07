@@ -41,7 +41,7 @@ VERMELHO = "#ef4444"
 
 NOME_PLANILHA    = "Data Licitacoes"
 NOME_ABA         = "Página1"
-CREDENTIALS_PATH = Path(__file__).parent.parent / "credentials.json"
+# CREDENTIALS_PATH removido — usando Streamlit Secrets
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -252,7 +252,7 @@ hr {{ border-color: {BORDA} !important; }}
 .resumo-value {{ font-size: 16px; font-weight: 700; color: {AZUL}; }}
 .resumo-sep {{ width: 1px; height: 36px; background: {BORDA}; }}
 
-/* Corrige ícone nativo de recolher sidebar (Material Icons não carregado) */
+/* Corrige ícone nativo de recolher sidebar */
 [data-testid="collapsedControl"] span,
 button[data-testid="baseButton-headerNoPadding"] span,
 [data-testid="stSidebarCollapsedControl"] span {{
@@ -325,7 +325,7 @@ def prazo_html(ts) -> str:
 
 
 def n_agencias_estimado(valor_num: float) -> str:
-    if valor_num <= 0:   return "—"
+    if valor_num <= 0:        return "—"
     if valor_num < 100_000:   return "1–2"
     if valor_num < 500_000:   return "2–5"
     if valor_num < 2_000_000: return "3–8"
@@ -361,9 +361,9 @@ def carregar_do_sheets(_gc, planilha_nome: str, aba_nome: str) -> pd.DataFrame:
     if not dados:
         return pd.DataFrame()
     df = pd.DataFrame(dados).fillna("")
-    df["score"]     = df.apply(calcular_score, axis=1)
+    df["score"]      = df.apply(calcular_score, axis=1)
     df["prioridade"] = df["score"].apply(score_label)
-    df["valor_num"] = pd.to_numeric(df.get("valor_estimado", ""), errors="coerce").fillna(0)
+    df["valor_num"]  = pd.to_numeric(df.get("valor_estimado", ""), errors="coerce").fillna(0)
     if "data_publicacao"   in df.columns:
         df["data_pub"] = pd.to_datetime(df["data_publicacao"],   errors="coerce")
     if "data_encerramento" in df.columns:
@@ -372,15 +372,36 @@ def carregar_do_sheets(_gc, planilha_nome: str, aba_nome: str) -> pd.DataFrame:
 
 
 def conectar_sheets():
+    """
+    Conecta ao Google Sheets usando Streamlit Secrets (produção no Streamlit Cloud)
+    ou credentials.json local (desenvolvimento).
+    """
     if "gc" not in st.session_state:
         if not GSPREAD_OK:
             st.error("Instale: pip install gspread google-auth")
             st.stop()
-        if not CREDENTIALS_PATH.exists():
-            st.error(f"credentials.json não encontrado em: {CREDENTIALS_PATH}")
-            st.stop()
-        creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=SCOPES)
+
+        # ── Opção 1: Streamlit Cloud (Secrets) ───────────────────────────────
+        if "gcp_service_account" in st.secrets:
+            creds = Credentials.from_service_account_info(
+                dict(st.secrets["gcp_service_account"]),
+                scopes=SCOPES,
+            )
+
+        # ── Opção 2: desenvolvimento local (credentials.json) ────────────────
+        else:
+            local_path = Path(__file__).parent.parent / "credentials.json"
+            if not local_path.exists():
+                st.error(
+                    "Credenciais não encontradas.\n\n"
+                    "• **Streamlit Cloud:** adicione `[gcp_service_account]` nos Secrets.\n"
+                    "• **Local:** coloque `credentials.json` em `" + str(local_path) + "`."
+                )
+                st.stop()
+            creds = Credentials.from_service_account_file(str(local_path), scopes=SCOPES)
+
         st.session_state["gc"] = gspread.authorize(creds)
+
     return st.session_state["gc"]
 
 
@@ -407,7 +428,6 @@ with st.sidebar:
             st.cache_data.clear()
             st.rerun()
 
-    # Botão voltar ao dashboard
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
     if st.button("← Voltar ao Dashboard", use_container_width=True, key="btn_voltar"):
         st.switch_page("dashboard_licitacoes_streamlit.py")
@@ -635,11 +655,6 @@ else:
         valor_disp = f"R$ {vn:,.0f}".replace(",", ".") if vn > 0 else "A definir"
         local_sec  = mun if mun and mun.lower() != uf.lower() else ""
 
-        tags_html = "".join(
-            f"<span class='lic-tag'>{t.strip()}</span>"
-            for t in kws.split(",") if t.strip()
-        )[:3*80]  # limita ao HTML dos primeiros 3 tags aproximadamente
-
         tags_list = [t.strip() for t in kws.split(",") if t.strip()][:3]
         tags_html = "".join(f"<span class='lic-tag'>{t}</span>" for t in tags_list)
 
@@ -656,8 +671,8 @@ else:
             f"margin-right:8px'>{sc}</span>"
         )
 
-        obj_curto = objeto[:160] + ("..." if len(objeto) > 160 else "")
-        orgao_curto = orgao[:60] + ("..." if len(orgao) > 60 else "")
+        obj_curto   = objeto[:160] + ("..." if len(objeto) > 160 else "")
+        orgao_curto = orgao[:60]   + ("..." if len(orgao)  > 60  else "")
 
         st.markdown(
             f"""
