@@ -400,7 +400,7 @@ def conectar_sheets():
                 st.stop()
             creds = Credentials.from_service_account_file(str(local_path), scopes=SCOPES)
 
-        st.session_state["gc"] = gspread.authorize(creds)
+        st.session_state["gc"] = gspread.Client(auth=creds)
 
     return st.session_state["gc"]
 

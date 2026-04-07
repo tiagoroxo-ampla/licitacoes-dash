@@ -278,10 +278,9 @@ def conectar_sheets():
             )
             st.stop()
 
-        st.session_state["gc"] = gspread.authorize(creds)
+        st.session_state["gc"] = gspread.Client(auth=creds)
 
     return st.session_state["gc"]
-
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
