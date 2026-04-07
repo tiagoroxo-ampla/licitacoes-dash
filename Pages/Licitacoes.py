@@ -455,7 +455,18 @@ with st.spinner("Conectando..."):
         df_raw = pd.DataFrame()
 
 if not ok:
-    st.error(f"Erro ao conectar ao Google Sheets: {err}")
+    st.error(f"Erro: {err}")
+    # Mostra o que foi lido dos secrets para diagnóstico
+    if "credentials" in st.secrets:
+        raw = dict(st.secrets["credentials"])
+        pk  = raw.get("private_key", "NÃO ENCONTRADO")
+        st.write("**private_key (início):**", repr(pk[:80]))
+        st.write("**private_key (fim):**",    repr(pk[-40:]))
+        st.write("**\\n real na chave:**", "\n" in pk)
+        st.write("**\\\\n literal na chave:**", "\\n" in pk)
+        st.write("**client_email:**", raw.get("client_email", "NÃO ENCONTRADO"))
+    else:
+        st.warning("Chave `[credentials]` NÃO encontrada nos Secrets!")
     st.stop()
 if df_raw.empty:
     st.warning("Planilha conectada, mas sem dados.")
