@@ -372,31 +372,31 @@ def carregar_do_sheets(_gc, planilha_nome: str, aba_nome: str) -> pd.DataFrame:
 
 
 def conectar_sheets():
-    """
-    Conecta ao Google Sheets usando Streamlit Secrets (produção no Streamlit Cloud)
-    ou credentials.json local (desenvolvimento).
-    """
     if "gc" not in st.session_state:
         if not GSPREAD_OK:
             st.error("Instale: pip install gspread google-auth")
             st.stop()
 
-        # ── Opção 1: Streamlit Cloud (Secrets) ───────────────────────────────
-        if "gcp_service_account" in st.secrets:
-            creds = Credentials.from_service_account_info(
-                dict(st.secrets["gcp_service_account"]),
-                scopes=SCOPES,
-            )
+        if "credentials" in st.secrets:
+            raw = dict(st.secrets["credentials"])
 
-        # ── Opção 2: desenvolvimento local (credentials.json) ────────────────
+            # Garante que \n literais virem quebras de linha reais na chave
+            if "private_key" in raw:
+                raw["private_key"] = raw["private_key"].replace("\\n", "\n")
+
+            # ── Diagnóstico temporário ────────────────────────────────────────
+            pk = raw.get("private_key", "")
+            st.write("**DEBUG — primeiros 80 chars da chave:**", pk[:80])
+            st.write("**DEBUG — últimos 40 chars:**", pk[-40:])
+            st.write("**DEBUG — contém newline real:**", "\n" in pk)
+            st.write("**DEBUG — client_email:**", raw.get("client_email"))
+            # ─────────────────────────────────────────────────────────────────
+
+            creds = Credentials.from_service_account_info(raw, scopes=SCOPES)
         else:
             local_path = Path(__file__).parent.parent / "credentials.json"
             if not local_path.exists():
-                st.error(
-                    "Credenciais não encontradas.\n\n"
-                    "• **Streamlit Cloud:** adicione `[gcp_service_account]` nos Secrets.\n"
-                    "• **Local:** coloque `credentials.json` em `" + str(local_path) + "`."
-                )
+                st.error("credentials.json não encontrado e Secrets não configurados.")
                 st.stop()
             creds = Credentials.from_service_account_file(str(local_path), scopes=SCOPES)
 
