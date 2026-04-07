@@ -274,7 +274,7 @@ with col_status:
     st.markdown("<div style='text-align:right;margin-top:8px'><span class='status-ok'><span class='dot-ok'></span>Sheets</span></div>", unsafe_allow_html=True)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     if st.button("📋 Ver Licitações", use_container_width=True, key="btn_ir_licitacoes"):
-        st.switch_page("Pages/Licitacoes.py")
+        st.switch_page("pages/Licitacoes.py")
 
 st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
