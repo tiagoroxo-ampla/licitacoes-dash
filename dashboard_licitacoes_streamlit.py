@@ -256,39 +256,29 @@ def carregar_do_sheets(_gc, planilha_nome: str, aba_nome: str) -> pd.DataFrame:
 
 
 def conectar_sheets():
-    """
-    Conecta ao Google Sheets usando:
-    1. Secrets do Streamlit Cloud (produção)
-    2. Arquivo credentials.json (desenvolvimento local)
-    """
     if "gc" not in st.session_state:
         if not GSPREAD_OK:
             st.error("Instale: pip install gspread google-auth")
             st.stop()
 
-        try:
-            # ✅ Tenta ler dos Secrets do Streamlit Cloud
-            if "credentials" in st.secrets:
-                credentials_dict = st.secrets["credentials"]
-                creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
-            # ✅ Fallback para arquivo local em desenvolvimento
-            elif CREDENTIALS_PATH.exists():
-                creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=SCOPES)
-            else:
-                st.error(
-                    f"❌ Credenciais não encontradas!\n\n"
-                    f"**No Streamlit Cloud:**\n"
-                    f"1. Vá em 'Manage app' → 'Settings' → 'Secrets'\n"
-                    f"2. Cole o conteúdo TOML das credenciais\n\n"
-                    f"**Localmente:**\n"
-                    f"Coloque credentials.json em: {CREDENTIALS_PATH}"
-                )
-                st.stop()
+        if "credentials" in st.secrets:
+            # Converte para dict puro e corrige \n literais na private_key
+            raw = dict(st.secrets["credentials"])
+            raw["private_key"] = raw["private_key"].replace("\\n", "\n")
+            creds = Credentials.from_service_account_info(raw, scopes=SCOPES)
 
-            st.session_state["gc"] = gspread.authorize(creds)
-        except Exception as e:
-            st.error(f"❌ Erro ao conectar: {str(e)}")
+        elif CREDENTIALS_PATH.exists():
+            creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=SCOPES)
+
+        else:
+            st.error(
+                "Credenciais não encontradas!\n\n"
+                "No Streamlit Cloud: Settings → Secrets → cole o bloco [credentials].\n"
+                f"Localmente: coloque credentials.json em {CREDENTIALS_PATH}"
+            )
             st.stop()
+
+        st.session_state["gc"] = gspread.authorize(creds)
 
     return st.session_state["gc"]
 
