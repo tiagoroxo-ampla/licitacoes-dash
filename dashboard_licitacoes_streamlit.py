@@ -262,14 +262,12 @@ def conectar_sheets():
             st.stop()
 
         if "credentials" in st.secrets:
-            # Converte para dict puro e corrige \n literais na private_key
             raw = dict(st.secrets["credentials"])
             raw["private_key"] = raw["private_key"].replace("\\n", "\n")
-            creds = Credentials.from_service_account_info(raw, scopes=SCOPES)
-
         elif CREDENTIALS_PATH.exists():
-            creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=SCOPES)
-
+            import json
+            with open(CREDENTIALS_PATH) as f:
+                raw = json.load(f)
         else:
             st.error(
                 "Credenciais não encontradas!\n\n"
@@ -278,7 +276,8 @@ def conectar_sheets():
             )
             st.stop()
 
-        st.session_state["gc"] = gspread.Client(auth=creds)
+        gc = gspread.service_account_from_dict(raw)
+        st.session_state["gc"] = gc
 
     return st.session_state["gc"]
 

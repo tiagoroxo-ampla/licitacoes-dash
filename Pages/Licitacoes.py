@@ -379,28 +379,18 @@ def conectar_sheets():
 
         if "credentials" in st.secrets:
             raw = dict(st.secrets["credentials"])
-
-            # Garante que \n literais virem quebras de linha reais na chave
-            if "private_key" in raw:
-                raw["private_key"] = raw["private_key"].replace("\\n", "\n")
-
-            # ── Diagnóstico temporário ────────────────────────────────────────
-            pk = raw.get("private_key", "")
-            st.write("**DEBUG — primeiros 80 chars da chave:**", pk[:80])
-            st.write("**DEBUG — últimos 40 chars:**", pk[-40:])
-            st.write("**DEBUG — contém newline real:**", "\n" in pk)
-            st.write("**DEBUG — client_email:**", raw.get("client_email"))
-            # ─────────────────────────────────────────────────────────────────
-
-            creds = Credentials.from_service_account_info(raw, scopes=SCOPES)
+            raw["private_key"] = raw["private_key"].replace("\\n", "\n")
         else:
             local_path = Path(__file__).parent.parent / "credentials.json"
             if not local_path.exists():
                 st.error("credentials.json não encontrado e Secrets não configurados.")
                 st.stop()
-            creds = Credentials.from_service_account_file(str(local_path), scopes=SCOPES)
+            import json
+            with open(local_path) as f:
+                raw = json.load(f)
 
-        st.session_state["gc"] = gspread.Client(auth=creds)
+        gc = gspread.service_account_from_dict(raw)
+        st.session_state["gc"] = gc
 
     return st.session_state["gc"]
 
