@@ -1,15 +1,17 @@
 """
 Ampla — Radar de Licitações  v3
 ================================
-Página: /Licitações — lista detalhada de editais.
-Destaque: valor · local · órgão · agências · prazo.
+Página: /Licitações — tabela principal com filtros avançados.
+Foco: Valor, Agências, Local, Órgão, Prazo — dados CLASSIFICÁVEIS.
+Download de PDF dos editais.
 """
 
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
+import requests
 
 try:
     import gspread
@@ -41,13 +43,15 @@ VERMELHO = "#ef4444"
 
 NOME_PLANILHA    = "Data Licitacoes"
 NOME_ABA         = "Página1"
-# CREDENTIALS_PATH removido — usando Streamlit Secrets
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
 
 SCORE_WEIGHTS = {
+    "comunicação digital":       45,
+    "publicidade digital":       42,
+    "marketing digital":         40,
     "agência de publicidade":    40,
     "campanha publicitária":     35,
     "criação publicitária":      35,
@@ -86,7 +90,7 @@ html, body, [class*="css"] {{
 .block-container {{
     background-color: {BG} !important;
     padding-top: 1.5rem !important;
-    max-width: 1400px;
+    max-width: 1600px;
 }}
 .stApp > header, [data-testid="stHeader"] {{ background: transparent !important; }}
 p, span, div, label {{ font-family: 'Space Grotesk', sans-serif !important; }}
@@ -183,88 +187,31 @@ hr {{ border-color: {BORDA} !important; }}
     margin-bottom: 0.75rem !important;
 }}
 
-/* Cards */
-.lic-card {{
-    background: {SURFACE};
-    border: 1px solid {BORDA};
-    border-radius: 14px;
-    margin-bottom: 14px;
+/* Tabela customizada */
+[data-testid="dataframe"] {{
+    width: 100% !important;
+    border-radius: 10px;
     overflow: hidden;
 }}
-.lic-card:hover {{ border-color: {AZUL_MID}; }}
-.lic-card-top {{
-    padding: 14px 18px 10px 18px;
-    border-bottom: 1px solid {BORDA};
+[data-testid="dataframe"] th {{
+    background-color: {SURFACE2} !important;
+    color: {AZUL} !important;
+    font-weight: 700 !important;
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    border: none !important;
+    padding: 12px 8px !important;
 }}
-.lic-card-body {{
-    display: grid;
-    grid-template-columns: 2fr 2fr 1.5fr 1fr 1.5fr;
-}}
-.lic-field {{
-    padding: 12px 18px;
-    border-right: 1px solid {BORDA};
-}}
-.lic-field:last-child {{ border-right: none; }}
-.lic-field-label {{
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: {MUTED};
-    margin-bottom: 4px;
-}}
-.lic-field-value {{
-    font-size: 13px;
-    font-weight: 600;
-    color: {TEXTO};
-    line-height: 1.35;
-}}
-.lic-tag {{
-    display: inline-block;
-    background: rgba(77,107,255,0.12);
-    color: {AZUL_MID};
-    border: 1px solid rgba(77,107,255,0.22);
-    border-radius: 20px;
-    padding: 2px 9px;
-    font-size: 10px;
-    font-weight: 600;
-    margin-right: 4px;
-    margin-bottom: 2px;
-}}
-
-/* Faixa de resumo */
-.resumo-strip {{
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    background: {SURFACE};
-    border: 1px solid {BORDA};
-    border-radius: 12px;
-    padding: 12px 20px;
-    margin-bottom: 18px;
-    flex-wrap: wrap;
-}}
-.resumo-item {{ display: flex; flex-direction: column; gap: 2px; }}
-.resumo-label {{
-    font-size: 9px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.1em; color: {MUTED};
-}}
-.resumo-value {{ font-size: 16px; font-weight: 700; color: {AZUL}; }}
-.resumo-sep {{ width: 1px; height: 36px; background: {BORDA}; }}
-
-/* Corrige ícone nativo de recolher sidebar */
-[data-testid="collapsedControl"] span,
-button[data-testid="baseButton-headerNoPadding"] span,
-[data-testid="stSidebarCollapsedControl"] span {{
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-size: 0 !important;
-}}
-[data-testid="collapsedControl"] span::after,
-button[data-testid="baseButton-headerNoPadding"] span::after,
-[data-testid="stSidebarCollapsedControl"] span::after {{
-    content: '☰' !important;
-    font-size: 18px !important;
+[data-testid="dataframe"] td {{
+    border: none !important;
+    padding: 10px 8px !important;
     color: {TEXTO} !important;
+    background-color: {SURFACE} !important;
+    font-size: 12px !important;
+}}
+[data-testid="dataframe"] tr:hover {{
+    background-color: {SURFACE2} !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -287,16 +234,30 @@ def calcular_score(row) -> int:
     return min(int(score), 99)
 
 
-def score_label(s: int) -> str:
-    if s >= 70: return "🟢 Alto"
-    if s >= 50: return "🟡 Médio"
-    return "🔴 Baixo"
-
-
 def score_color(s: int) -> str:
     if s >= 70: return VERDE
     if s >= 50: return AMARELO
     return VERMELHO
+
+
+def categorizar_licitacao(row) -> str:
+    """Categoriza em COMUNICAÇÃO DIGITAL ou PUBLICIDADE E PROPAGANDA"""
+    texto = f"{row.get('objeto','') or ''} {row.get('palavras_encontradas','') or ''}".lower()
+
+    digital_kws = ["comunicação digital", "publicidade digital", "marketing digital",
+                   "redes sociais", "mídia social", "social media", "seo", "sem",
+                   "email marketing", "automação digital"]
+    pub_kws = ["publicidade", "propaganda", "campanha publicitária", "agência de publicidade",
+               "criação publicitária", "mídia exterior", "outdoor", "busdoor"]
+
+    digital_score = sum(1 for kw in digital_kws if kw in texto)
+    pub_score = sum(1 for kw in pub_kws if kw in texto)
+
+    if digital_score > pub_score:
+        return "Comunicação Digital"
+    elif pub_score > 0:
+        return "Publicidade e Propaganda"
+    return "Geral"
 
 
 def dias_restantes(ts) -> int | None:
@@ -309,21 +270,6 @@ def dias_restantes(ts) -> int | None:
         return None
 
 
-def prazo_html(ts) -> str:
-    dias = dias_restantes(ts)
-    if dias is None:
-        return f"<span style='color:{MUTED}'>—</span>"
-    if dias < 0:
-        return f"<span style='color:{VERMELHO};font-weight:700'>Encerrado</span>"
-    if dias == 0:
-        return f"<span style='color:{VERMELHO};font-weight:700'>Hoje!</span>"
-    if dias <= 5:
-        return f"<span style='color:{VERMELHO};font-weight:700'>⚠ {dias}d</span>"
-    if dias <= 15:
-        return f"<span style='color:{AMARELO};font-weight:700'>⏳ {dias}d</span>"
-    return f"<span style='color:{VERDE};font-weight:700'>✓ {dias}d</span>"
-
-
 def n_agencias_estimado(valor_num: float) -> str:
     if valor_num <= 0:        return "—"
     if valor_num < 100_000:   return "1–2"
@@ -333,22 +279,30 @@ def n_agencias_estimado(valor_num: float) -> str:
     return "10+"
 
 
-def df_para_excel(df: pd.DataFrame) -> bytes:
+def baixar_pdf_edital(url: str, nome_arquivo: str) -> bytes:
+    """Baixa PDF do edital da URL e retorna como bytes"""
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            return response.content
+    except Exception:
+        pass
+    return None
+
+
+def excel_bytes(df_: pd.DataFrame) -> bytes:
+    """Exporta dados para Excel"""
+    cols = ["categoria", "score", "valor_estimado", "uf", "municipio", "orgao",
+            "objeto", "data_encerramento", "fonte", "n_agencias"]
+    cols = [c for c in cols if c in df_.columns]
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df.to_excel(w, index=False, sheet_name="Licitações")
+        df_[cols].to_excel(w, index=False, sheet_name="Licitações")
         ws = w.sheets["Licitações"]
         for col in ws.columns:
             max_len = max(len(str(c.value or "")) for c in col)
             ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 60)
     return buf.getvalue()
-
-
-def excel_bytes(df_: pd.DataFrame) -> bytes:
-    cols = ["score", "prioridade", "valor_estimado", "uf", "municipio", "orgao",
-            "objeto", "modalidade", "data_publicacao", "data_encerramento", "fonte", "link"]
-    cols = [c for c in cols if c in df_.columns]
-    return df_para_excel(df_[cols])
 
 
 # ── Google Sheets ─────────────────────────────────────────────────────────────
@@ -362,8 +316,9 @@ def carregar_do_sheets(_gc, planilha_nome: str, aba_nome: str) -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.DataFrame(dados).fillna("")
     df["score"]      = df.apply(calcular_score, axis=1)
-    df["prioridade"] = df["score"].apply(score_label)
+    df["categoria"]  = df.apply(categorizar_licitacao, axis=1)
     df["valor_num"]  = pd.to_numeric(df.get("valor_estimado", ""), errors="coerce").fillna(0)
+    df["n_agencias"] = df["valor_num"].apply(n_agencias_estimado)
     if "data_publicacao"   in df.columns:
         df["data_pub"] = pd.to_datetime(df["data_publicacao"],   errors="coerce")
     if "data_encerramento" in df.columns:
@@ -446,14 +401,10 @@ with st.spinner("Conectando..."):
 
 if not ok:
     st.error(f"Erro: {err}")
-    # Mostra o que foi lido dos secrets para diagnóstico
     if "credentials" in st.secrets:
         raw = dict(st.secrets["credentials"])
         pk  = raw.get("private_key", "NÃO ENCONTRADO")
         st.write("**private_key (início):**", repr(pk[:80]))
-        st.write("**private_key (fim):**",    repr(pk[-40:]))
-        st.write("**\\n real na chave:**", "\n" in pk)
-        st.write("**\\\\n literal na chave:**", "\\n" in pk)
         st.write("**client_email:**", raw.get("client_email", "NÃO ENCONTRADO"))
     else:
         st.warning("Chave `[credentials]` NÃO encontrada nos Secrets!")
@@ -470,27 +421,24 @@ with filtros_ph.container():
     ufs = ["Todos"] + sorted([u for u in df_raw["uf"].dropna().unique() if u])
     uf_sel = st.selectbox("📍 Estado (UF)", ufs)
 
-    score_min = st.slider("⭐ Score mínimo", 0, 99, 0, step=5)
+    valor_min = st.number_input("💰 Valor mínimo (R$)", min_value=0, value=0, step=50000)
+    valor_max = st.number_input("💰 Valor máximo (R$)", min_value=0, value=100000000, step=50000)
+
+    categorias = ["Todas"] + sorted([c for c in df_raw["categoria"].dropna().unique() if c])
+    categoria_sel = st.selectbox("📌 Categoria", categorias)
 
     fontes = ["Todas"] + sorted([f for f in df_raw["fonte"].dropna().unique() if f])
     fonte_sel = st.selectbox("📰 Fonte", fontes)
 
-    mods = ["Todas"] + sorted([m for m in df_raw["modalidade"].dropna().unique() if m])
-    mod_sel = st.selectbox("📋 Modalidade", mods)
-
-    valor_min = st.number_input("💰 Valor mínimo (R$)", min_value=0, value=0, step=10000)
-
     apenas_abertos = st.checkbox("🟢 Apenas abertos", value=True)
 
     ordem_opcoes = {
-        "Score (maior primeiro)":    ("score",    False),
-        "Prazo (mais urgente)":      ("data_enc", True),
         "Valor (maior primeiro)":    ("valor_num", False),
-        "Publicação (mais recente)": ("data_pub",  False),
+        "Prazo (mais urgente)":      ("data_enc", True),
+        "Score (maior primeiro)":    ("score", False),
+        "Publicação (mais recente)": ("data_pub", False),
     }
     ordem_sel = st.selectbox("↕️ Ordenar por", list(ordem_opcoes.keys()))
-
-    POR_PAG = st.select_slider("Resultados por página", options=[5, 10, 20, 50], value=10)
 
     st.markdown("---")
     ultima = df_raw.get("data_importacao", pd.Series(dtype=str)).max()
@@ -511,11 +459,11 @@ if busca:
     )
     df = df[mask]
 
-if uf_sel    != "Todos":  df = df[df["uf"]        == uf_sel]
-if fonte_sel != "Todas":  df = df[df["fonte"]      == fonte_sel]
-if score_min >  0:        df = df[df["score"]      >= score_min]
-if mod_sel   != "Todas":  df = df[df["modalidade"] == mod_sel]
-if valor_min >  0:        df = df[df["valor_num"]  >= valor_min]
+if uf_sel    != "Todos":        df = df[df["uf"]        == uf_sel]
+if categoria_sel != "Todas":    df = df[df["categoria"] == categoria_sel]
+if fonte_sel != "Todas":        df = df[df["fonte"]      == fonte_sel]
+if valor_min >  0:              df = df[df["valor_num"]  >= valor_min]
+if valor_max > 0:               df = df[df["valor_num"]  <= valor_max]
 
 if apenas_abertos and "data_enc" in df.columns:
     hoje = pd.Timestamp(date.today())
@@ -527,18 +475,6 @@ if ord_col in df.columns:
 
 df = df.reset_index(drop=True)
 
-# ── Paginação ─────────────────────────────────────────────────────────────────
-total  = len(df)
-n_pags = max(1, -(-total // POR_PAG))
-
-if "pag_licitacoes" not in st.session_state:
-    st.session_state["pag_licitacoes"] = 1
-
-pag    = max(1, min(st.session_state["pag_licitacoes"], n_pags))
-inicio = (pag - 1) * POR_PAG
-fim    = min(inicio + POR_PAG, total)
-df_pag = df.iloc[inicio:fim]
-
 
 # ── Header ────────────────────────────────────────────────────────────────────
 col_h1, col_h2 = st.columns([5, 1])
@@ -547,17 +483,17 @@ with col_h1:
         f"<h1 style='margin:0;font-size:1.6rem;letter-spacing:-0.03em;color:{TEXTO}'>"
         f"📋 Licitações"
         f"<span style='font-size:1rem;font-weight:400;color:{MUTED};margin-left:12px'>"
-        f"{total:,} resultado{'s' if total != 1 else ''}</span></h1>".replace(",", "."),
+        f"{len(df):,} resultado{'s' if len(df) != 1 else ''}</span></h1>".replace(",", "."),
         unsafe_allow_html=True,
     )
     st.markdown(
         f"<div style='font-size:12px;color:{MUTED};margin-top:2px;margin-bottom:1rem'>"
-        f"Ampla · Radar de Licitações · Setor de Publicidade</div>",
+        f"Tabela de licitações filtrada e classificável por valor, estado, órgão, e data de entrega</div>",
         unsafe_allow_html=True,
     )
 with col_h2:
     st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    if total > 0:
+    if len(df) > 0:
         st.download_button(
             "⬇️ Excel",
             data=excel_bytes(df),
@@ -581,30 +517,26 @@ else:
 
 st.markdown(
     f"""
-    <div class="resumo-strip">
-      <div class="resumo-item">
-        <div class="resumo-label">Valor total estimado</div>
-        <div class="resumo-value">{"R$ " + f"{valor_total/1e6:.1f}M" if valor_total > 0 else "—"}</div>
+    <div style='display:flex;gap:20px;align-items:center;background:{SURFACE};border:1px solid {BORDA};
+                border-radius:12px;padding:12px 20px;margin-bottom:18px;flex-wrap:wrap'>
+      <div style='display:flex;flex-direction:column;gap:2px'>
+        <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{MUTED}'>Valor Total</div>
+        <div style='font-size:16px;font-weight:700;color:{AZUL}'>{"R$ " + f"{valor_total/1e6:.1f}M" if valor_total > 0 else "—"}</div>
       </div>
-      <div class="resumo-sep"></div>
-      <div class="resumo-item">
-        <div class="resumo-label">Score alto ≥70</div>
-        <div class="resumo-value">{altos}</div>
+      <div style='width:1px;height:36px;background:{BORDA}'></div>
+      <div style='display:flex;flex-direction:column;gap:2px'>
+        <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{MUTED}'>Score Alto ≥70</div>
+        <div style='font-size:16px;font-weight:700;color:{VERDE}'>{altos}</div>
       </div>
-      <div class="resumo-sep"></div>
-      <div class="resumo-item">
-        <div class="resumo-label">Estados</div>
-        <div class="resumo-value">{ufs_n}</div>
+      <div style='width:1px;height:36px;background:{BORDA}'></div>
+      <div style='display:flex;flex-direction:column;gap:2px'>
+        <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{MUTED}'>Estados</div>
+        <div style='font-size:16px;font-weight:700;color:{AZUL}>{ufs_n}</div>
       </div>
-      <div class="resumo-sep"></div>
-      <div class="resumo-item">
-        <div class="resumo-label">Prazo médio restante</div>
-        <div class="resumo-value">{prazo_med}</div>
-      </div>
-      <div class="resumo-sep"></div>
-      <div class="resumo-item">
-        <div class="resumo-label">Mostrando</div>
-        <div class="resumo-value">{inicio+1 if total > 0 else 0}–{fim} de {total}</div>
+      <div style='width:1px;height:36px;background:{BORDA}'></div>
+      <div style='display:flex;flex-direction:column;gap:2px'>
+        <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{MUTED}'>Prazo Médio</div>
+        <div style='font-size:16px;font-weight:700;color:{AMARELO}'>{prazo_med}</div>
       </div>
     </div>
     """,
@@ -612,145 +544,84 @@ st.markdown(
 )
 
 
-# ── Cabeçalho das colunas ─────────────────────────────────────────────────────
-st.markdown(
-    f"""
-    <div style='display:grid;grid-template-columns:2fr 2fr 1.5fr 1fr 1.5fr;
-                padding:6px 18px;border-radius:8px 8px 0 0;
-                background:{SURFACE2};border:1px solid {BORDA};border-bottom:none'>
-      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:{AZUL}'>💰 Valor</div>
-      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:{AZUL}'>📍 Local</div>
-      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:{AZUL}'>🏛️ Órgão Contratante</div>
-      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:{AZUL}'>🏢 Agências</div>
-      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:{AZUL}'>⏱ Prazo</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# ── Cards ─────────────────────────────────────────────────────────────────────
-if total == 0:
+# ── Tabela Principal ──────────────────────────────────────────────────────────
+if len(df) == 0:
     st.markdown(
         f"<div style='text-align:center;padding:3rem;color:{MUTED}'>"
         f"Nenhuma licitação encontrada com os filtros selecionados.</div>",
         unsafe_allow_html=True,
     )
 else:
-    for _, r in df_pag.iterrows():
-        sc      = int(r.get("score", 0))
-        cor     = score_color(sc)
-        vn      = float(r.get("valor_num", 0) or 0)
-        objeto  = str(r.get("objeto",  "") or "")
-        orgao   = str(r.get("orgao",   "") or "")
-        uf      = str(r.get("uf",      "") or "—")
-        mun     = str(r.get("municipio","") or "")
-        fonte   = str(r.get("fonte",   "") or "")
-        mod     = str(r.get("modalidade","") or "")
-        link    = str(r.get("link",    "") or "")
-        pub     = str(r.get("data_publicacao","") or "")[:10]
-        enc     = r.get("data_enc", None)
-        enc_str = str(r.get("data_encerramento","") or "")[:10]
-        kws     = str(r.get("palavras_encontradas","") or "")
+    # Preparar dados para exibição
+    df_display = df[[
+        "categoria", "valor_num", "uf", "municipio", "orgao",
+        "objeto", "data_encerramento", "n_agencias", "fonte", "score", "link"
+    ]].copy()
 
-        valor_disp = f"R$ {vn:,.0f}".replace(",", ".") if vn > 0 else "A definir"
-        local_sec  = mun if mun and mun.lower() != uf.lower() else ""
+    df_display.columns = [
+        "Categoria", "Valor (R$)", "UF", "Município", "Órgão",
+        "Objeto", "Prazo", "Agências", "Fonte", "Score", "Link"
+    ]
 
-        tags_list = [t.strip() for t in kws.split(",") if t.strip()][:3]
-        tags_html = "".join(f"<span class='lic-tag'>{t}</span>" for t in tags_list)
+    # Formatar colunas
+    df_display["Valor (R$)"] = df_display["Valor (R$)"].apply(
+        lambda x: f"R$ {x:,.0f}".replace(",", ".") if x > 0 else "A definir"
+    )
+    df_display["Prazo"] = df_display["Prazo"].apply(
+        lambda x: str(x)[:10] if pd.notna(x) else "—"
+    )
 
-        link_html = (
-            f'<a href="{link}" target="_blank" style="'
-            f'display:inline-block;background:{AZUL};color:white;border-radius:6px;'
-            f'padding:4px 12px;font-size:11px;font-weight:600;text-decoration:none">'
-            f'Ver edital →</a>'
-        ) if link else ""
+    # Exibir tabela
+    st.dataframe(
+        df_display.drop("Link", axis=1),
+        use_container_width=True,
+        height=600,
+    )
 
-        score_badge = (
-            f"<span style='background:{cor}18;color:{cor};border:1px solid {cor}40;"
-            f"border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;"
-            f"margin-right:8px'>{sc}</span>"
-        )
+    # Seção de download de PDFs
+    st.divider()
+    st.markdown(f"<div class='section-header'>📥 Baixar Editais em PDF</div>", unsafe_allow_html=True)
 
-        obj_curto   = objeto[:160] + ("..." if len(objeto) > 160 else "")
-        orgao_curto = orgao[:60]   + ("..." if len(orgao)  > 60  else "")
-
-        st.markdown(
-            f"""
-            <div class="lic-card" style="border-left:4px solid {cor}">
-              <div class="lic-card-top">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-                  <div style="flex:1">
-                    {score_badge}
-                    <span style="font-size:9px;background:{SURFACE2};color:{MUTED};
-                                 border:1px solid {BORDA};border-radius:4px;
-                                 padding:2px 7px;font-weight:600;margin-right:6px">{mod}</span>
-                    <span style="font-size:9px;background:{SURFACE2};color:{MUTED};
-                                 border:1px solid {BORDA};border-radius:4px;
-                                 padding:2px 7px;font-weight:600">{fonte}</span>
-                    <div style="margin-top:8px;font-size:13px;font-weight:500;
-                                color:{TEXTO};line-height:1.5">{obj_curto}</div>
-                    <div style="margin-top:6px">{tags_html}</div>
-                  </div>
-                  <div style="flex-shrink:0;text-align:right;min-width:110px">
-                    {link_html}
-                    <div style="font-size:10px;color:{MUTED};margin-top:8px">Pub. {pub}</div>
-                  </div>
-                </div>
-              </div>
-              <div class="lic-card-body">
-                <div class="lic-field">
-                  <div class="lic-field-label">💰 Valor estimado</div>
-                  <div class="lic-field-value" style="font-size:15px;color:{VERDE};font-weight:700">{valor_disp}</div>
-                </div>
-                <div class="lic-field">
-                  <div class="lic-field-label">📍 Local</div>
-                  <div class="lic-field-value">
-                    <span style="font-size:15px;font-weight:700">{uf}</span>
-                    {'<br><span style="font-size:11px;color:' + MUTED + '">' + local_sec + '</span>' if local_sec else ''}
-                  </div>
-                </div>
-                <div class="lic-field">
-                  <div class="lic-field-label">🏛️ Órgão contratante</div>
-                  <div class="lic-field-value" style="font-size:12px">{orgao_curto}</div>
-                </div>
-                <div class="lic-field">
-                  <div class="lic-field-label">🏢 Agências</div>
-                  <div class="lic-field-value" style="font-size:15px;color:{AZUL_MID}">{n_agencias_estimado(vn)}</div>
-                </div>
-                <div class="lic-field">
-                  <div class="lic-field-label">⏱ Prazo</div>
-                  <div class="lic-field-value">
-                    {prazo_html(enc)}
-                    <div style="font-size:11px;color:{MUTED};margin-top:3px">{enc_str}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-# ── Paginação ─────────────────────────────────────────────────────────────────
-if n_pags > 1:
-    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-    col_prev, col_info, col_next = st.columns([1, 4, 1])
-
-    with col_prev:
-        if st.button("← Anterior", disabled=(pag <= 1), use_container_width=True):
-            st.session_state["pag_licitacoes"] = pag - 1
-            st.rerun()
+    col_info, col_acao = st.columns([4, 1])
     with col_info:
         st.markdown(
-            f"<div style='text-align:center;font-size:12px;color:{MUTED};padding-top:8px'>"
-            f"Página {pag} de {n_pags} · {total} resultados</div>",
-            unsafe_allow_html=True,
+            f"<div style='font-size:12px;color:{MUTED}'>Selecione o edital abaixo para baixar o PDF completo:</div>",
+            unsafe_allow_html=True
         )
-    with col_next:
-        if st.button("Próxima →", disabled=(pag >= n_pags), use_container_width=True):
-            st.session_state["pag_licitacoes"] = pag + 1
-            st.rerun()
+
+    # Criar lista de editais para download
+    editais_disponiveis = df[df["link"].notna() & (df["link"] != "")].copy()
+
+    if len(editais_disponiveis) > 0:
+        for idx, (_, row) in enumerate(editais_disponiveis.head(20).iterrows()):
+            objeto_short = str(row.get("objeto", ""))[:80]
+            uf = row.get("uf", "—")
+            valor = row.get("valor_num", 0)
+            valor_str = f"R$ {valor:,.0f}".replace(",", ".") if valor > 0 else "A definir"
+            link = row.get("link", "")
+
+            col_desc, col_btn = st.columns([5, 1])
+            with col_desc:
+                st.markdown(
+                    f"<div style='font-size:12px;color:{TEXTO};font-weight:500'>{objeto_short}...</div>"
+                    f"<div style='font-size:11px;color:{MUTED};margin-top:2px'>{uf} · {valor_str}</div>",
+                    unsafe_allow_html=True
+                )
+            with col_btn:
+                if st.button("📥", key=f"pdf_btn_{idx}", help="Baixar PDF"):
+                    pdf_data = baixar_pdf_edital(link, f"edital_{idx}.pdf")
+                    if pdf_data:
+                        st.download_button(
+                            "⬇️ PDF",
+                            data=pdf_data,
+                            file_name=f"edital_{uf}_{idx}.pdf",
+                            mime="application/pdf",
+                            key=f"pdf_dl_{idx}"
+                        )
+                    else:
+                        st.warning("Não foi possível baixar o PDF")
+    else:
+        st.info("Nenhum edital com link disponível para download.")
 
 
 # ── Exportar rodapé ───────────────────────────────────────────────────────────
@@ -765,7 +636,7 @@ with ce1:
         use_container_width=True,
     )
 with ce2:
-    if total > 0:
+    if len(df) > 0:
         st.download_button(
             "📊 Exportar Excel",
             data=excel_bytes(df),
@@ -776,7 +647,7 @@ with ce2:
 with ce3:
     st.markdown(
         f"<div style='font-size:11px;color:{MUTED};padding-top:10px'>"
-        f"Ampla · {total:,} de {len(df_raw):,} editais · "
+        f"Ampla · {len(df):,} de {len(df_raw):,} editais · "
         f"Cache 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         f"</div>".replace(",", "."),
         unsafe_allow_html=True,

@@ -1,7 +1,7 @@
 """
 Ampla — Radar de Licitações  v3
 ================================
-Página principal: visão geral e gráficos.
+Página principal: visão geral e acesso direto às licitações.
 """
 
 import streamlit as st
@@ -53,6 +53,9 @@ FONTE_CORES = {
 }
 
 SCORE_WEIGHTS = {
+    "comunicação digital":       45,
+    "publicidade digital":       42,
+    "marketing digital":         40,
     "agência de publicidade":    40,
     "campanha publicitária":     35,
     "criação publicitária":      35,
@@ -244,8 +247,6 @@ with filtros_ph.container():
     fontes    = ["Todas"] + sorted([f for f in df_raw["fonte"].dropna().unique() if f])
     fonte_sel = st.selectbox("📰 Fonte", fontes)
     score_min = st.slider("⭐ Score mínimo", 0, 99, 0, step=5)
-    mods      = ["Todas"] + sorted([m for m in df_raw["modalidade"].dropna().unique() if m])
-    mod_sel   = st.selectbox("📋 Modalidade", mods)
     st.markdown("---")
     ultima = df_raw.get("data_importacao", pd.Series(dtype=str)).max()
     st.markdown(f"<div style='font-size:10px;color:rgba(255,255,255,0.4);text-align:center'>Última importação<br>{str(ultima)[:16]}</div>", unsafe_allow_html=True)
@@ -262,7 +263,6 @@ if busca:
 if uf_sel    != "Todos":  df = df[df["uf"]        == uf_sel]
 if fonte_sel != "Todas":  df = df[df["fonte"]      == fonte_sel]
 if score_min >  0:        df = df[df["score"]      >= score_min]
-if mod_sel   != "Todas":  df = df[df["modalidade"] == mod_sel]
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -279,141 +279,68 @@ with col_status:
 st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
 
-# ── KPIs ──────────────────────────────────────────────────────────────────────
+# ── KPIs compactos ───────────────────────────────────────────────────────────────────
 altos       = int((df["score"] >= 70).sum())
 medios      = int(((df["score"] >= 50) & (df["score"] < 70)).sum())
 valor_total = df["valor_num"].sum()
 ufs_n       = df["uf"].nunique()
 
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Editais",       f"{len(df):,}".replace(",", "."), delta=f"de {len(df_raw):,}".replace(",", ".") + " total")
-c2.metric("Score Alto ≥70", altos, delta=f"{altos/max(len(df),1)*100:.0f}% filtrado")
-c3.metric("Score Médio",   medios)
-c4.metric("Valor estimado", f"R$ {valor_total/1e6:.1f}M" if valor_total > 0 else "—")
-c5.metric("Estados",       ufs_n)
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total de Editais", f"{len(df):,}".replace(",", "."))
+c2.metric("Valor Estimado", f"R$ {valor_total/1e6:.1f}M" if valor_total > 0 else "—")
+c3.metric("Score Alto ≥70", altos)
+c4.metric("Estados", ufs_n)
 
-st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+st.divider()
+
+# ── Mensagem destacada ────────────────────────────────────────────────────────
+st.markdown(
+    f"<div style='background:{AZUL}15;border:1px solid {AZUL}40;border-left:4px solid {AZUL};border-radius:10px;padding:16px;margin-bottom:20px'>"
+    f"<div style='font-size:14px;font-weight:600;color:{AZUL};margin-bottom:6px'>📊 Explore as licitações em detalhe</div>"
+    f"<div style='font-size:12px;color:{TEXTO}'>Clique em <strong>Ver Licitações</strong> acima para acessar a tabela completa, filtrar por valor, estado, órgão e data de entrega, e baixar editais em PDF.</div>"
+    f"</div>",
+    unsafe_allow_html=True
+)
+
 st.divider()
 
 
-# ── Gráficos ──────────────────────────────────────────────────────────────────
-col_g1, col_g2, col_g3 = st.columns([5, 4, 3])
+# ── Gráficos compactos ──────────────────────────────────────────────────────────
+col_g1, col_g2 = st.columns([2, 2])
 
 with col_g1:
-    st.markdown("<div class='section-header'>📍 Editais por estado</div>", unsafe_allow_html=True)
-    uf_counts = df["uf"].value_counts().head(12).reset_index()
+    st.markdown("<div class='section-header'>📍 Top 10 Estados</div>", unsafe_allow_html=True)
+    uf_counts = df["uf"].value_counts().head(10).reset_index()
     uf_counts.columns = ["UF", "Qtd"]
     fig_uf = px.bar(uf_counts, x="Qtd", y="UF", orientation="h", color="Qtd",
                     color_continuous_scale=[SURFACE2, AZUL_MID, AZUL], template="plotly_dark")
-    fig_uf.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=280,
+    fig_uf.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=220,
                          showlegend=False, coloraxis_showscale=False,
-                         yaxis=dict(categoryorder="total ascending", tickfont=dict(size=11, color=MUTED), gridcolor=SURFACE2),
-                         xaxis=dict(tickfont=dict(size=10, color=MUTED), gridcolor=SURFACE2),
+                         yaxis=dict(categoryorder="total ascending", tickfont=dict(size=10, color=MUTED), gridcolor=SURFACE2),
+                         xaxis=dict(tickfont=dict(size=9, color=MUTED), gridcolor=SURFACE2),
                          font=dict(family="Space Grotesk", color=TEXTO))
     fig_uf.update_traces(marker_line_width=0)
     st.plotly_chart(fig_uf, use_container_width=True)
 
 with col_g2:
-    st.markdown("<div class='section-header'>📰 Por fonte</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>📰 Por Fonte</div>", unsafe_allow_html=True)
     fc = df["fonte"].value_counts().reset_index()
     fc.columns = ["Fonte", "Qtd"]
     fig_pie = go.Figure(go.Pie(
         labels=fc["Fonte"], values=fc["Qtd"], hole=0.62,
-        marker_colors=[FONTE_CORES.get(f, MUTED) for f in fc["Fonte"]],
-        textinfo="label+percent", textfont=dict(size=11, family="Space Grotesk", color=TEXTO),
+        marker_colors=[{"PNCP": AZUL, "Querido Diário": AZUL_MID, "BLL": AMARELO, "Licitações-e": VERDE}.get(f, MUTED) for f in fc["Fonte"]],
+        textinfo="label+percent", textfont=dict(size=10, family="Space Grotesk", color=TEXTO),
         insidetextorientation="auto",
     ))
-    fig_pie.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=280,
+    fig_pie.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=220,
                           showlegend=False, font=dict(family="Space Grotesk", color=TEXTO),
-                          annotations=[dict(text=f"<b>{len(df)}</b>", x=0.5, y=0.5, font_size=22, showarrow=False,
+                          annotations=[dict(text=f"<b>{len(df)}</b>", x=0.5, y=0.5, font_size=20, showarrow=False,
                                             font=dict(color=AZUL, family="Space Grotesk"))])
     st.plotly_chart(fig_pie, use_container_width=True)
 
-with col_g3:
-    st.markdown("<div class='section-header'>⭐ Por prioridade</div>", unsafe_allow_html=True)
-    for label, count in df["prioridade"].value_counts().items():
-        pct = count / max(len(df), 1) * 100
-        cor = VERDE if "Alto" in label else AMARELO if "Médio" in label else VERMELHO
-        st.markdown(
-            f"<div style='margin-bottom:14px'>"
-            f"<div style='display:flex;justify-content:space-between;margin-bottom:5px'>"
-            f"<span style='font-size:12px;font-weight:500;color:{TEXTO}'>{label}</span>"
-            f"<span style='font-size:12px;font-weight:700;color:{cor}'>{count}</span></div>"
-            f"<div style='height:7px;background:{SURFACE2};border-radius:4px;overflow:hidden'>"
-            f"<div style='height:100%;width:{pct:.0f}%;background:{cor};border-radius:4px'></div></div>"
-            f"<div style='font-size:10px;color:{MUTED};margin-top:2px'>{pct:.0f}% do total</div></div>",
-            unsafe_allow_html=True,
-        )
-
 st.divider()
 
-
-# ── Top oportunidades + Keywords ──────────────────────────────────────────────
-col_top, col_kw = st.columns([3, 2])
-
-with col_top:
-    st.markdown("<div class='section-header'>🏆 Top oportunidades</div>", unsafe_allow_html=True)
-    for _, r in df.nlargest(10, "score").iterrows():
-        sc        = int(r.get("score", 0))
-        cor       = score_color(sc)
-        vn        = float(r.get("valor_num", 0) or 0)
-        valor_str = f"R$ {vn:,.0f}".replace(",", ".") if vn > 0 else "—"
-        link      = str(r.get("link", "") or "")
-        objeto    = str(r.get("objeto", "") or "")[:130]
-        enc       = str(r.get("data_encerramento", "") or "")
-        orgao     = str(r.get("orgao", "") or "")[:40]
-        link_html = f'<a href="{link}" target="_blank" style="font-size:10px;color:{AZUL};text-decoration:none;font-weight:600">Ver edital →</a>' if link else ""
-        enc_html  = f"<span>⏱ {enc}</span>" if enc else ""
-        st.markdown(
-            f"<div style='background:{SURFACE};border:1px solid {BORDA};border-left:4px solid {cor};border-radius:10px;padding:11px 14px;margin-bottom:8px'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px'>"
-            f"<div style='font-size:12.5px;font-weight:500;line-height:1.5;flex:1;color:{TEXTO}'>{objeto}{'...' if len(objeto)==130 else ''}</div>"
-            f"<div style='display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0'>"
-            f"<span style='background:{cor}18;color:{cor};border:1px solid {cor}30;border-radius:5px;padding:2px 9px;font-size:11px;font-weight:700'>{sc}</span>"
-            f"{link_html}</div></div>"
-            f"<div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:11px;color:{MUTED}'>"
-            f"<span>📍 {r.get('uf','') or '—'}</span><span>🏛️ {orgao}</span>"
-            f"<span>📰 {r.get('fonte','') or '—'}</span><span>💰 {valor_str}</span>{enc_html}</div></div>",
-            unsafe_allow_html=True,
-        )
-
-with col_kw:
-    st.markdown("<div class='section-header'>🏷️ Palavras-chave</div>", unsafe_allow_html=True)
-    kw_cnt = Counter()
-    for kws in df["palavras_encontradas"].dropna():
-        for k in kws.split(","):
-            k = k.strip()
-            if k: kw_cnt[k] += 1
-    kw_top = kw_cnt.most_common(14)
-    if kw_top:
-        max_cnt = kw_top[0][1]
-        for kw, cnt in kw_top:
-            pct = cnt / max_cnt * 100
-            st.markdown(
-                f"<div style='margin-bottom:9px'>"
-                f"<div style='display:flex;justify-content:space-between;margin-bottom:3px'>"
-                f"<span style='font-size:12px;color:{TEXTO}'>{kw}</span>"
-                f"<span style='font-size:11px;color:{MUTED};font-weight:600'>{cnt}</span></div>"
-                f"<div style='height:5px;background:{SURFACE2};border-radius:3px;overflow:hidden'>"
-                f"<div style='height:100%;width:{pct:.0f}%;background:linear-gradient(90deg,{AZUL_MID},{AZUL});border-radius:3px'></div>"
-                f"</div></div>",
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-    st.markdown("<div class='section-header'>📅 Publicações recentes</div>", unsafe_allow_html=True)
-    if "data_pub" in df.columns:
-        por_dia = df.dropna(subset=["data_pub"]).groupby(df["data_pub"].dt.date).size().reset_index(name="n").tail(20)
-        por_dia.columns = ["Data", "Editais"]
-        fig_line = px.line(por_dia, x="Data", y="Editais", template="plotly_dark", color_discrete_sequence=[AZUL])
-        fig_line.update_traces(line_width=2, mode="lines+markers", marker=dict(size=4, color=AZUL))
-        fig_line.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=160,
-                                xaxis=dict(showgrid=False, tickfont=dict(size=9, color=MUTED), title=None),
-                                yaxis=dict(gridcolor=SURFACE2, tickfont=dict(size=9, color=MUTED), title=None),
-                                font=dict(family="Space Grotesk", color=TEXTO))
-        st.plotly_chart(fig_line, use_container_width=True)
-
-st.divider()
 st.markdown(
     f"<div style='font-size:11px;color:{MUTED};text-align:center;padding-bottom:1.5rem'>"
     f"Ampla · {len(df):,} de {len(df_raw):,} editais · Cache 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}"
