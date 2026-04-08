@@ -1,18 +1,14 @@
 """
 Ampla — Radar de Licitações  v3
-================================
-Página principal: visão geral e acesso direto às licitações.
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import traceback
 import json
 from io import BytesIO
-from collections import Counter
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
 try:
@@ -21,62 +17,24 @@ try:
 except ImportError:
     GSPREAD_OK = False
 
-# ── Página ────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Ampla — Radar de Licitações",
     page_icon="https://www.ampla.com.br/wp-content/uploads/2023/01/cropped-favicon-192x192.png",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ── Paleta ────────────────────────────────────────────────────────────────────
-AZUL        = "#001FFF"
-AZUL_ESC    = "#0016CC"
-AZUL_MID    = "#4d6bff"
-AZUL_LIGHT  = "#e8ebff"
-BRANCO      = "#FFFFFF"
-BG          = "#0f0f13"
-SURFACE     = "#18181e"
-SURFACE2    = "#22222c"
-BORDA       = "#2e2e3d"
-TEXTO       = "#f0f0f8"
-MUTED       = "#8888aa"
-VERDE       = "#00c48c"
-AMARELO     = "#f59e0b"
-VERMELHO    = "#ef4444"
-
-FONTE_CORES = {
-    "PNCP":           AZUL,
-    "Querido Diário": AZUL_MID,
-    "BLL":            AMARELO,
-    "Licitações-e":   VERDE,
-}
-
-SCORE_WEIGHTS = {
-    "comunicação digital":       45,
-    "publicidade digital":       42,
-    "marketing digital":         40,
-    "agência de publicidade":    40,
-    "campanha publicitária":     35,
-    "criação publicitária":      35,
-    "veiculação de mídia":       30,
-    "produção audiovisual":      28,
-    "comunicação social":        25,
-    "assessoria de comunicação": 25,
-    "serviços de comunicação":   22,
-    "publicidade":               20,
-    "propaganda":                18,
-    "mídia exterior":            18,
-    "inserção televisiva":       18,
-    "inserção de mídia":         16,
-    "outdoor":                   14,
-    "busdoor":                   14,
-    "mídia":                     12,
-    "marketing":                 10,
-    "veiculação":                 8,
-    "relações públicas":          8,
-    "anúncio":                    6,
-}
+AZUL     = "#001FFF"
+AZUL_MID = "#4d6bff"
+BG       = "#0f0f13"
+SURFACE  = "#18181e"
+SURFACE2 = "#22222c"
+BORDA    = "#2e2e3d"
+TEXTO    = "#f0f0f8"
+MUTED    = "#8888aa"
+VERDE    = "#00c48c"
+AMARELO  = "#f59e0b"
+VERMELHO = "#ef4444"
 
 NOME_PLANILHA    = "Data Licitacoes"
 NOME_ABA         = "Página1"
@@ -86,56 +44,68 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-LOGO_SVG = '<img src="https://www.ampla.com.br/wp-content/uploads/2022/12/logo-ampla.svg" height="105" style="margin-bottom:15px;margin-top:5px;">'
-LOGO_SVG_BRANCA = '<img src="https://handson.tec.br/static/img/logo/logo-branca.png" height="50">'
+SCORE_WEIGHTS = {
+    "comunicação digital": 45, "publicidade digital": 42, "marketing digital": 40,
+    "agência de publicidade": 40, "campanha publicitária": 35, "criação publicitária": 35,
+    "veiculação de mídia": 30, "produção audiovisual": 28, "comunicação social": 25,
+    "assessoria de comunicação": 25, "serviços de comunicação": 22, "publicidade": 20,
+    "propaganda": 18, "mídia exterior": 18, "inserção televisiva": 18,
+    "inserção de mídia": 16, "outdoor": 14, "busdoor": 14, "mídia": 12,
+    "marketing": 10, "veiculação": 8, "relações públicas": 8, "anúncio": 6,
+}
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+LOGO_SVG_BRANCA = '<img src="https://handson.tec.br/static/img/logo/logo-branca.png" height="40">'
+
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] {{ font-family: 'Space Grotesk', sans-serif !important; background-color: {BG} !important; color: {TEXTO}; }}
 .stApp {{ background-color: {BG} !important; }}
-.block-container {{ background-color: {BG} !important; padding-top: 1.5rem !important; }}
+.block-container {{ background-color: {BG} !important; padding-top: 1rem !important; max-width: 1400px; }}
 .stApp > header, [data-testid="stHeader"] {{ background: transparent !important; }}
 p, span, div, label {{ font-family: 'Space Grotesk', sans-serif !important; }}
 h1, h2, h3, h4 {{ font-family: 'Space Grotesk', sans-serif !important; font-weight: 700 !important; color: {TEXTO} !important; }}
-[data-baseweb="select"] svg {{ fill: {MUTED} !important; }}
-section[data-testid="stSidebar"] [data-baseweb="select"] svg {{ fill: white !important; }}
-section[data-testid="stSidebar"] {{ background: {AZUL} !important; border-right: none !important; }}
-section[data-testid="stSidebar"] * {{ color: rgba(255,255,255,0.9) !important; font-family: 'Space Grotesk', sans-serif !important; }}
-section[data-testid="stSidebar"] .stSelectbox label, section[data-testid="stSidebar"] .stSlider label, section[data-testid="stSidebar"] .stTextInput label {{ color: rgba(255,255,255,0.6) !important; font-size: 10px !important; text-transform: uppercase !important; letter-spacing: 0.1em !important; font-weight: 600 !important; }}
-section[data-testid="stSidebar"] [data-baseweb="select"] {{ background: rgba(255,255,255,0.12) !important; border-radius: 8px !important; border: 1px solid rgba(255,255,255,0.22) !important; }}
-section[data-testid="stSidebar"] [data-baseweb="select"] * {{ color: white !important; background: transparent !important; }}
-section[data-testid="stSidebar"] input {{ background: rgba(255,255,255,0.12) !important; border: 1px solid rgba(255,255,255,0.22) !important; border-radius: 8px !important; color: white !important; }}
-section[data-testid="stSidebar"] input::placeholder {{ color: rgba(255,255,255,0.35) !important; }}
-section[data-testid="stSidebar"] hr {{ border-color: rgba(255,255,255,0.18) !important; }}
-[data-testid="metric-container"] {{ background: {SURFACE} !important; border: 1px solid {BORDA} !important; border-radius: 14px !important; padding: 1.1rem 1.3rem !important; border-top: 3px solid {AZUL} !important; }}
-[data-testid="stMetricLabel"] {{ font-size: 10px !important; text-transform: uppercase !important; letter-spacing: 0.1em !important; color: {MUTED} !important; font-weight: 600 !important; }}
-[data-testid="stMetricValue"] {{ font-weight: 700 !important; font-size: 1.85rem !important; color: {AZUL} !important; letter-spacing: -0.02em !important; }}
-[data-testid="stMetricDelta"] {{ font-size: 11px !important; color: {MUTED} !important; }}
-[data-testid="stMetricDelta"] svg {{ display: none !important; }}
-.stButton > button {{ background: {AZUL} !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; font-family: 'Space Grotesk', sans-serif !important; }}
-.stButton > button:hover {{ opacity: 0.82 !important; }}
+/* Todos stButton cinza (paginação) */
+.stButton > button {{ background: {SURFACE2} !important; color: {MUTED} !important; border: 1px solid {BORDA} !important; border-radius: 8px !important; font-weight: 500 !important; }}
+.stButton > button:hover {{ background: {BORDA} !important; color: {TEXTO} !important; opacity:1 !important; }}
+/* Download buttons azul */
+[data-testid="stDownloadButton"] button {{ background: {AZUL} !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; }}
+[data-testid="stDownloadButton"] button:hover {{ opacity: 0.82 !important; }}
+/* Recarregar azul via nested horizontal block */
+div[data-testid="stHorizontalBlock"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child .stButton > button {{ background: {AZUL} !important; color: white !important; border: none !important; font-weight: 600 !important; }}
 [data-baseweb="select"] {{ background: {SURFACE2} !important; border-radius: 8px !important; border: 1px solid {BORDA} !important; }}
+[data-baseweb="select"] * {{ color: {TEXTO} !important; }}
 [data-baseweb="popover"] ul {{ background: {SURFACE2} !important; }}
 [data-baseweb="popover"] li {{ background: {SURFACE2} !important; color: {TEXTO} !important; }}
 [data-baseweb="popover"] li:hover {{ background: {BORDA} !important; }}
-.stTextInput input {{ background: {SURFACE2} !important; border: 1px solid {BORDA} !important; border-radius: 8px !important; color: {TEXTO} !important; }}
+.stTextInput input, .stNumberInput input {{ background: {SURFACE2} !important; border: 1px solid {BORDA} !important; border-radius: 8px !important; color: {TEXTO} !important; }}
+.stSelectbox label, .stTextInput label, .stNumberInput label, .stCheckbox label {{ font-size: 10px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.1em !important; color: {MUTED} !important; }}
 ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
 ::-webkit-scrollbar-track {{ background: {BG}; }}
 ::-webkit-scrollbar-thumb {{ background: {BORDA}; border-radius: 3px; }}
 hr {{ border-color: {BORDA} !important; }}
-.section-header {{ font-size: 10px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.12em !important; color: {MUTED} !important; margin-bottom: 0.75rem !important; }}
-.status-ok {{ display: inline-flex; align-items: center; gap: 6px; background: rgba(0,31,255,0.12); color: {AZUL}; border: 1px solid rgba(0,31,255,0.25); border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 600; }}
-.dot-ok {{ width: 6px; height: 6px; background: {AZUL}; border-radius: 50%; animation: blink 2s ease-in-out infinite; }}
-@keyframes blink {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.3; }} }}
+.kpi-strip {{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }}
+.kpi-item {{ background:{SURFACE}; border:1px solid {BORDA}; border-top:3px solid {AZUL}; border-radius:12px; padding:14px 16px; flex:1; min-width:120px; text-align:center; }}
+.kpi-label {{ font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:{MUTED}; margin-bottom:6px; }}
+.kpi-value {{ font-size:28px; font-weight:700; color:{AZUL}; line-height:1.1; }}
+.lic-card {{ background:{SURFACE}; border:1px solid {BORDA}; border-radius:14px; margin-bottom:12px; overflow:hidden; }}
+.lic-card:hover {{ border-color:{AZUL_MID}; }}
+.card-priority {{ display:grid; grid-template-columns:1.4fr 0.7fr 0.7fr 1.6fr 1.4fr; border-bottom:1px solid {BORDA}; }}
+.card-field {{ padding:12px 16px; border-right:1px solid {BORDA}; }}
+.card-field:last-child {{ border-right:none; }}
+.card-field-label {{ font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:{MUTED}; margin-bottom:4px; }}
+.card-field-value {{ font-size:14px; font-weight:700; color:{TEXTO}; line-height:1.3; }}
+.card-footer {{ padding:10px 16px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }}
+.card-objeto {{ font-size:12px; font-weight:400; color:{MUTED}; line-height:1.5; flex:1; }}
+.card-badges {{ display:flex; gap:6px; align-items:center; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }}
+.badge {{ display:inline-block; border-radius:20px; padding:2px 9px; font-size:10px; font-weight:600; background:{SURFACE2}; color:{MUTED}; border:1px solid {BORDA}; }}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Funções ───────────────────────────────────────────────────────────────────
 
-def calcular_score(row) -> int:
+def calcular_score(row):
     texto = f"{row.get('objeto','') or ''} {row.get('palavras_encontradas','') or ''}".lower()
     score = sum(w for kw, w in SCORE_WEIGHTS.items() if kw in texto)
     mod = str(row.get("modalidade", "") or "").lower()
@@ -149,33 +119,68 @@ def calcular_score(row) -> int:
         pass
     return min(int(score), 99)
 
-def score_label(s): return "🟢 Alto" if s >= 70 else "🟡 Médio" if s >= 50 else "🔴 Baixo"
-def score_color(s): return VERDE if s >= 70 else AMARELO if s >= 50 else VERMELHO
+def score_color(s):
+    return VERDE if s >= 70 else AMARELO if s >= 50 else VERMELHO
+
+def n_agencias(v):
+    if v <= 0:         return "—"
+    if v < 100_000:    return "1–2"
+    if v < 500_000:    return "2–5"
+    if v < 2_000_000:  return "3–8"
+    if v < 10_000_000: return "5–15"
+    return "10+"
+
+def dias_restantes(ts):
+    if pd.isna(ts): return None
+    try:
+        d = ts.date() if hasattr(ts, "date") else ts
+        return (d - date.today()).days
+    except Exception:
+        return None
+
+def prazo_html(ts):
+    d = dias_restantes(ts)
+    if d is None: return f"<span style='color:{MUTED}'>—</span>"
+    if d < 0:     return f"<span style='color:{VERMELHO};font-weight:700'>Encerrado</span>"
+    if d == 0:    return f"<span style='color:{VERMELHO};font-weight:700'>Hoje!</span>"
+    if d <= 5:    return f"<span style='color:{VERMELHO};font-weight:700'>⚠ {d}d</span>"
+    if d <= 15:   return f"<span style='color:{AMARELO};font-weight:700'>⏳ {d}d</span>"
+    return              f"<span style='color:{VERDE};font-weight:700'>✓ {d}d</span>"
+
+def excel_bytes(df_):
+    cols = ["score","valor_estimado","n_agencias","uf","municipio",
+            "orgao","objeto","modalidade","data_encerramento","fonte","link"]
+    cols = [c for c in cols if c in df_.columns]
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as w:
+        df_[cols].to_excel(w, index=False, sheet_name="Licitações")
+        ws = w.sheets["Licitações"]
+        for col in ws.columns:
+            ws.column_dimensions[col[0].column_letter].width = min(
+                max(len(str(c.value or "")) for c in col) + 4, 60)
+    return buf.getvalue()
 
 
 # ── Google Sheets ─────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_do_sheets(_gc, planilha_nome, aba_nome):
-    planilha = _gc.open(planilha_nome)
-    ws = planilha.worksheet(aba_nome)
+    ws    = _gc.open(planilha_nome).worksheet(aba_nome)
     dados = ws.get_all_records(default_blank="")
     if not dados:
         return pd.DataFrame()
     df = pd.DataFrame(dados).fillna("")
     df["score"]      = df.apply(calcular_score, axis=1)
-    df["prioridade"] = df["score"].apply(score_label)
-    df["valor_num"]  = pd.to_numeric(df.get("valor_estimado", ""), errors="coerce").fillna(0)
+    df["valor_num"]  = pd.to_numeric(df.get("valor_estimado",""), errors="coerce").fillna(0)
+    df["n_agencias"] = df["valor_num"].apply(n_agencias)
     if "data_publicacao"   in df.columns: df["data_pub"] = pd.to_datetime(df["data_publicacao"],   errors="coerce")
     if "data_encerramento" in df.columns: df["data_enc"] = pd.to_datetime(df["data_encerramento"], errors="coerce")
     return df.sort_values("score", ascending=False).reset_index(drop=True)
-
 
 def conectar_sheets():
     if "gc" not in st.session_state:
         if not GSPREAD_OK:
             raise RuntimeError("gspread não instalado")
-
         if "credentials" in st.secrets:
             raw = dict(st.secrets["credentials"])
             raw["private_key"] = raw["private_key"].replace("\\n", "\n")
@@ -183,77 +188,109 @@ def conectar_sheets():
             with open(CREDENTIALS_PATH) as f:
                 raw = json.load(f)
         else:
-            raise FileNotFoundError("Credenciais não encontradas nos Secrets nem localmente.")
-
+            raise FileNotFoundError("Credenciais não encontradas.")
         st.session_state["gc"] = gspread.service_account_from_dict(raw)
-
     return st.session_state["gc"]
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown(LOGO_SVG_BRANCA, unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown("<div style='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.55);margin-bottom:8px'>Fonte de dados</div>", unsafe_allow_html=True)
-    col_s1, col_s2 = st.columns([3, 1])
-    with col_s1:
-        st.markdown(f"<div style='font-size:12px;color:rgba(255,255,255,0.85)'>📊 {NOME_PLANILHA}</div>", unsafe_allow_html=True)
-    with col_s2:
-        if st.button("↻", help="Recarregar dados"):
-            st.cache_data.clear()
-            st.rerun()
-    st.markdown("---")
-    st.markdown("<div style='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.55);margin-bottom:12px'>Filtros</div>", unsafe_allow_html=True)
-    filtros_ph = st.empty()
-
-
-# ── Conectar e carregar ───────────────────────────────────────────────────────
-sheets_ok  = False
-sheets_err = None
-sheets_tb  = None
-df_raw     = pd.DataFrame()
-
-with st.spinner("Conectando ao Google Sheets..."):
+# ── Conectar ──────────────────────────────────────────────────────────────────
+df_raw = pd.DataFrame()
+with st.spinner("Conectando..."):
     try:
         gc     = conectar_sheets()
         df_raw = carregar_do_sheets(gc, NOME_PLANILHA, NOME_ABA)
-        sheets_ok = True
     except Exception as e:
-        sheets_err = str(e)
-        sheets_tb  = traceback.format_exc()
-
-if not sheets_ok:
-    st.error(f"❌ Erro ao conectar: {sheets_err}")
-    st.code(sheets_tb, language="python")
-    if "credentials" in st.secrets:
-        raw = dict(st.secrets["credentials"])
-        st.info(f"✅ Secret [credentials] encontrado\n\n**client_email:** {raw.get('client_email')}\n\n**private_key começa com:** {raw.get('private_key','')[:60]}")
-    else:
-        st.warning("❌ Secret [credentials] NÃO encontrado!")
-    st.stop()
+        st.error(f"❌ Erro: {e}")
+        st.code(traceback.format_exc())
+        st.stop()
 
 if df_raw.empty:
-    st.warning("Planilha conectada, mas sem dados. Rode o buscador para popular a planilha.")
+    st.warning("Planilha conectada, mas sem dados.")
     st.stop()
 
-st.session_state["df_raw"] = df_raw
+
+# ── Session state ─────────────────────────────────────────────────────────────
+defaults = {
+    "f_busca": "", "f_uf": "Todos", "f_fonte": "Todas",
+    "f_mod": "Todas", "f_valor_min": 0, "f_ordem": "Score ↓",
+    "f_abertos": True, "pag": 1,
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 
-# ── Filtros (sidebar) ─────────────────────────────────────────────────────────
-with filtros_ph.container():
-    busca     = st.text_input("🔍 Buscar", placeholder="publicidade, mídia...")
-    ufs       = ["Todos"] + sorted([u for u in df_raw["uf"].dropna().unique() if u])
-    uf_sel    = st.selectbox("📍 Estado", ufs)
-    fontes    = ["Todas"] + sorted([f for f in df_raw["fonte"].dropna().unique() if f])
-    fonte_sel = st.selectbox("📰 Fonte", fontes)
-    score_min = st.slider("⭐ Score mínimo", 0, 99, 0, step=5)
-    st.markdown("---")
-    ultima = df_raw.get("data_importacao", pd.Series(dtype=str)).max()
-    st.markdown(f"<div style='font-size:10px;color:rgba(255,255,255,0.4);text-align:center'>Última importação<br>{str(ultima)[:16]}</div>", unsafe_allow_html=True)
+# ── Navbar ────────────────────────────────────────────────────────────────────
+col_logo, col_btns = st.columns([5, 3])
+with col_logo:
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:14px;padding:8px 0'>"
+        f"{LOGO_SVG_BRANCA}"
+        f"<div><div style='font-size:15px;font-weight:700;color:{TEXTO}'>Radar de Licitações</div>"
+        f"<div style='font-size:11px;color:{MUTED}'>Setor de Publicidade · Ampla</div></div></div>",
+        unsafe_allow_html=True)
+with col_btns:
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    b1, b2, b3 = st.columns(3)
+    with b1:
+        if st.button("↻ Recarregar", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    with b2:
+        st.download_button("⬇️ Excel", data=excel_bytes(df_raw),
+            file_name=f"licitacoes_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True)
+    with b3:
+        st.download_button("⬇️ CSV",
+            data=df_raw.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
+            file_name=f"licitacoes_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv", use_container_width=True)
+
+st.divider()
+
+
+# ── Filtros ───────────────────────────────────────────────────────────────────
+ufs    = ["Todos"] + sorted([u for u in df_raw["uf"].dropna().unique() if u])
+fontes = ["Todas"] + sorted([f for f in df_raw["fonte"].dropna().unique() if f])
+mods   = ["Todas"] + sorted([m for m in df_raw["modalidade"].dropna().unique() if m])
+ordem_opcoes = {
+    "Score ↓":  ("score",    False),
+    "Valor ↓":  ("valor_num", False),
+    "Prazo ↑":  ("data_enc", True),
+    "Pub. ↓":   ("data_pub", False),
+}
+
+if st.session_state["f_uf"]    not in ufs:    st.session_state["f_uf"]    = "Todos"
+if st.session_state["f_fonte"] not in fontes: st.session_state["f_fonte"] = "Todas"
+if st.session_state["f_mod"]   not in mods:   st.session_state["f_mod"]   = "Todas"
+
+def reset_pag(): st.session_state["pag"] = 1
+
+f1, f2, f3, f4, f5, f6, f7 = st.columns([2, 1, 1, 1, 1, 1, 1])
+with f1: st.text_input("🔍 Buscar", placeholder="objeto ou órgão...", key="f_busca", on_change=reset_pag)
+with f2: st.selectbox("📍 UF", ufs, index=ufs.index(st.session_state["f_uf"]), key="f_uf", on_change=reset_pag)
+with f3: st.selectbox("📰 Fonte", fontes, index=fontes.index(st.session_state["f_fonte"]), key="f_fonte", on_change=reset_pag)
+with f4: st.selectbox("📋 Modalidade", mods, index=mods.index(st.session_state["f_mod"]), key="f_mod", on_change=reset_pag)
+with f5: st.number_input("💰 Valor mín (R$)", min_value=0, step=50_000, key="f_valor_min", on_change=reset_pag)
+with f6: st.selectbox("↕️ Ordenar", list(ordem_opcoes.keys()), index=list(ordem_opcoes.keys()).index(st.session_state["f_ordem"]), key="f_ordem", on_change=reset_pag)
+with f7:
+    st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+    st.checkbox("🟢 Só abertos", key="f_abertos", on_change=reset_pag)
+
+st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
 
 
 # ── Aplicar filtros ───────────────────────────────────────────────────────────
 df = df_raw.copy()
+busca          = st.session_state["f_busca"]
+uf_sel         = st.session_state["f_uf"]
+fonte_sel      = st.session_state["f_fonte"]
+mod_sel        = st.session_state["f_mod"]
+valor_min      = st.session_state["f_valor_min"]
+ordem_sel      = st.session_state["f_ordem"]
+apenas_abertos = st.session_state["f_abertos"]
+
 if busca:
     mask = (
         df["objeto"].str.lower().str.contains(busca.lower(), na=False) |
@@ -262,88 +299,197 @@ if busca:
     df = df[mask]
 if uf_sel    != "Todos":  df = df[df["uf"]        == uf_sel]
 if fonte_sel != "Todas":  df = df[df["fonte"]      == fonte_sel]
-if score_min >  0:        df = df[df["score"]      >= score_min]
+if mod_sel   != "Todas":  df = df[df["modalidade"] == mod_sel]
+if valor_min >  0:        df = df[df["valor_num"]  >= valor_min]
+if apenas_abertos and "data_enc" in df.columns:
+    df = df[df["data_enc"].isna() | (df["data_enc"] >= pd.Timestamp(date.today()))]
+
+ord_col, ord_asc = ordem_opcoes[ordem_sel]
+if ord_col in df.columns:
+    df = df.sort_values(ord_col, ascending=ord_asc, na_position="last")
+df    = df.reset_index(drop=True)
+total = len(df)
 
 
-# ── Header ────────────────────────────────────────────────────────────────────
-col_logo, col_status = st.columns([5, 1])
-with col_logo:
-    st.markdown(LOGO_SVG, unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:13px;color:{MUTED};margin-top:2px'>Radar de Licitações · Setor de Publicidade</div>", unsafe_allow_html=True)
-with col_status:
-    st.markdown("<div style='text-align:right;margin-top:8px'><span class='status-ok'><span class='dot-ok'></span>Sheets</span></div>", unsafe_allow_html=True)
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    if st.button("📋 Ver Licitações", use_container_width=True, key="btn_ir_licitacoes"):
-        st.switch_page("pages/Licitacoes.py")
-
-st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
-
-
-# ── KPIs compactos ───────────────────────────────────────────────────────────────────
-altos       = int((df["score"] >= 70).sum())
-medios      = int(((df["score"] >= 50) & (df["score"] < 70)).sum())
+# ── KPIs ─────────────────────────────────────────────────────────────────────
 valor_total = df["valor_num"].sum()
+altos       = int((df["score"] >= 70).sum())
 ufs_n       = df["uf"].nunique()
+if "data_enc" in df.columns:
+    dl = [d for d in (dias_restantes(r) for r in df["data_enc"]) if d is not None and d >= 0]
+    prazo_med = f"{int(sum(dl)/len(dl))}d" if dl else "—"
+else:
+    prazo_med = "—"
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total de Editais", f"{len(df):,}".replace(",", "."))
-c2.metric("Valor Estimado", f"R$ {valor_total/1e6:.1f}M" if valor_total > 0 else "—")
-c3.metric("Score Alto ≥70", altos)
-c4.metric("Estados", ufs_n)
+total_fmt = f"{total:,}".replace(",", ".")
+valor_fmt = f"R$ {valor_total/1e6:.1f}M" if valor_total > 0 else "—"
 
-st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+st.markdown(f"""
+<div class="kpi-strip">
+  <div class="kpi-item"><div class="kpi-label">Resultados</div><div class="kpi-value">{total_fmt}</div></div>
+  <div class="kpi-item"><div class="kpi-label">Valor Total</div><div class="kpi-value">{valor_fmt}</div></div>
+  <div class="kpi-item"><div class="kpi-label">Score Alto ≥70</div><div class="kpi-value" style="color:{VERDE}">{altos}</div></div>
+  <div class="kpi-item"><div class="kpi-label">Estados</div><div class="kpi-value">{ufs_n}</div></div>
+  <div class="kpi-item"><div class="kpi-label">Prazo Médio</div><div class="kpi-value" style="color:{AMARELO}">{prazo_med}</div></div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── Paginação — cálculo ───────────────────────────────────────────────────────
+POR_PAG = 20
+n_pags  = max(1, -(-total // POR_PAG))
+if st.session_state["pag"] > n_pags:
+    st.session_state["pag"] = 1
+
+pag    = st.session_state["pag"]
+inicio = (pag - 1) * POR_PAG
+fim    = min(inicio + POR_PAG, total)
+df_pag = df.iloc[inicio:fim]
+
+
+# ── Cards ─────────────────────────────────────────────────────────────────────
+if total == 0:
+    st.markdown(f"<div style='text-align:center;padding:3rem;color:{MUTED}'>Nenhuma licitação encontrada.</div>", unsafe_allow_html=True)
+else:
+    st.markdown(f"""
+    <div style='display:grid;grid-template-columns:1.4fr 0.7fr 0.7fr 1.6fr 1.4fr;
+                padding:6px 16px;background:{SURFACE2};border:1px solid {BORDA};
+                border-radius:8px 8px 0 0;border-bottom:none'>
+      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{AZUL}'>💰 Valor</div>
+      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{AZUL}'>🏢 Agências</div>
+      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{AZUL}'>📍 Local</div>
+      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{AZUL}'>🏛️ Órgão</div>
+      <div style='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{AZUL}'>⏱ Prazo</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for _, r in df_pag.iterrows():
+        sc      = int(r.get("score", 0))
+        cor     = score_color(sc)
+        vn      = float(r.get("valor_num", 0) or 0)
+        uf      = str(r.get("uf", "") or "—")
+        mun     = str(r.get("municipio", "") or "")
+        orgao   = str(r.get("orgao", "") or "")[:55]
+        objeto  = str(r.get("objeto", "") or "")[:200]
+        mod     = str(r.get("modalidade", "") or "")
+        fonte   = str(r.get("fonte", "") or "")
+        link    = str(r.get("link", "") or "")
+        enc     = r.get("data_enc", None)
+        enc_str = str(r.get("data_encerramento", "") or "")[:16]
+        pub_str = str(r.get("data_publicacao", "") or "")[:10]
+
+        valor_disp = f"R$ {vn:,.0f}".replace(",", ".") if vn > 0 else "A definir"
+        local_sub  = f"<br><span style='font-size:11px;color:{MUTED}'>{mun}</span>" if mun and mun.lower() != uf.lower() else ""
+        link_html  = (
+            f'<a href="{link}" target="_blank" style="background:{AZUL};color:white;'
+            f'border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;text-decoration:none">Ver edital →</a>'
+        ) if link else ""
+
+        st.markdown(f"""
+        <div class="lic-card" style="border-left:4px solid {cor}">
+          <div class="card-priority">
+            <div class="card-field">
+              <div class="card-field-label">💰 Valor estimado</div>
+              <div class="card-field-value" style="color:{VERDE}">{valor_disp}</div>
+            </div>
+            <div class="card-field">
+              <div class="card-field-label">🏢 Agências</div>
+              <div class="card-field-value" style="color:{AZUL_MID}">{r.get("n_agencias","—")}</div>
+            </div>
+            <div class="card-field">
+              <div class="card-field-label">📍 Local</div>
+              <div class="card-field-value">{uf}{local_sub}</div>
+            </div>
+            <div class="card-field">
+              <div class="card-field-label">🏛️ Órgão contratante</div>
+              <div class="card-field-value" style="font-size:12px;font-weight:600">{orgao}</div>
+            </div>
+            <div class="card-field">
+              <div class="card-field-label">⏱ Prazo de entrega</div>
+              <div class="card-field-value">
+                {prazo_html(enc)}
+                <div style="font-size:11px;color:{MUTED};font-weight:400;margin-top:2px">{enc_str}</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <div class="card-objeto">{objeto}{"..." if len(objeto)==200 else ""}</div>
+            <div class="card-badges">
+              <span style="background:{cor}20;color:{cor};border:1px solid {cor}50;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700">{sc}</span>
+              <span class="badge">{mod}</span>
+              <span class="badge">{fonte}</span>
+              <span style="font-size:10px;color:{MUTED}">Pub. {pub_str}</span>
+              {link_html}
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ── Paginação ─────────────────────────────────────────────────────────────────
+if n_pags > 1:
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+    vis   = sorted({1, n_pags, *range(max(1, pag-2), min(n_pags, pag+2)+1)})
+    itens = []
+    prev  = None
+    for p in vis:
+        if prev is not None and p - prev > 1:
+            itens.append(None)
+        itens.append(p)
+        prev = p
+
+    def btn_pag(label, target, ativo=False, disabled=False):
+        base = "padding:7px 16px;font-size:13px;border-radius:8px;font-family:Space Grotesk,sans-serif;"
+        if disabled:
+            return f"<button disabled style='{base}background:{SURFACE2};color:{BORDA};border:1px solid {BORDA};cursor:not-allowed'>{label}</button>"
+        if ativo:
+            return f"<button style='{base}background:{AZUL};color:white;border:none;font-weight:700;cursor:default'>{label}</button>"
+        return (
+            f"<button onclick=\"window.parent.postMessage({{isStreamlitMessage:true,type:'streamlit:setComponentValue',value:{target}}},'*')\" "
+            f"style='{base}background:{SURFACE2};color:{MUTED};border:1px solid {BORDA};cursor:pointer;transition:background 0.15s' "
+            f"onmouseover=\"this.style.background='{BORDA}';this.style.color='{TEXTO}'\" "
+            f"onmouseout=\"this.style.background='{SURFACE2}';this.style.color='{MUTED}'\">{label}</button>"
+        )
+
+    partes = [btn_pag("←", pag-1, disabled=(pag<=1))]
+    for item in itens:
+        if item is None:
+            partes.append(f"<span style='color:{MUTED};padding:0 2px;font-size:13px'>…</span>")
+        elif item == pag:
+            partes.append(btn_pag(str(item), item, ativo=True))
+        else:
+            partes.append(btn_pag(str(item), item))
+    partes.append(btn_pag("→", pag+1, disabled=(pag>=n_pags)))
+
+    html_pag = f"""
+    <style>
+      * {{ box-sizing:border-box; margin:0; padding:0; }}
+      body {{ background:transparent; }}
+    </style>
+    <div style='display:flex;gap:8px;align-items:center;justify-content:center;padding:2px 0'>
+      {''.join(partes)}
+    </div>
+    """
+
+    _, col_pag, _ = st.columns([1, 4, 1])
+    with col_pag:
+        clicked = components.html(html_pag, height=46)
+
+    if clicked is not None and isinstance(clicked, (int, float)):
+        nova = int(clicked)
+        if 1 <= nova <= n_pags and nova != pag:
+            st.session_state["pag"] = nova
+            st.rerun()
+
+    st.markdown(
+        f"<div style='text-align:center;font-size:11px;color:{MUTED};margin-top:4px'>"
+        f"Página {pag} de {n_pags} · {total_fmt} resultados</div>",
+        unsafe_allow_html=True)
+
 st.divider()
-
-# ── Mensagem destacada ────────────────────────────────────────────────────────
 st.markdown(
-    f"<div style='background:{AZUL}15;border:1px solid {AZUL}40;border-left:4px solid {AZUL};border-radius:10px;padding:16px;margin-bottom:20px'>"
-    f"<div style='font-size:14px;font-weight:600;color:{AZUL};margin-bottom:6px'>📊 Explore as licitações em detalhe</div>"
-    f"<div style='font-size:12px;color:{TEXTO}'>Clique em <strong>Ver Licitações</strong> acima para acessar a tabela completa, filtrar por valor, estado, órgão e data de entrega, e baixar editais em PDF.</div>"
-    f"</div>",
-    unsafe_allow_html=True
-)
-
-st.divider()
-
-
-# ── Gráficos compactos ──────────────────────────────────────────────────────────
-col_g1, col_g2 = st.columns([2, 2])
-
-with col_g1:
-    st.markdown("<div class='section-header'>📍 Top 10 Estados</div>", unsafe_allow_html=True)
-    uf_counts = df["uf"].value_counts().head(10).reset_index()
-    uf_counts.columns = ["UF", "Qtd"]
-    fig_uf = px.bar(uf_counts, x="Qtd", y="UF", orientation="h", color="Qtd",
-                    color_continuous_scale=[SURFACE2, AZUL_MID, AZUL], template="plotly_dark")
-    fig_uf.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=220,
-                         showlegend=False, coloraxis_showscale=False,
-                         yaxis=dict(categoryorder="total ascending", tickfont=dict(size=10, color=MUTED), gridcolor=SURFACE2),
-                         xaxis=dict(tickfont=dict(size=9, color=MUTED), gridcolor=SURFACE2),
-                         font=dict(family="Space Grotesk", color=TEXTO))
-    fig_uf.update_traces(marker_line_width=0)
-    st.plotly_chart(fig_uf, use_container_width=True)
-
-with col_g2:
-    st.markdown("<div class='section-header'>📰 Por Fonte</div>", unsafe_allow_html=True)
-    fc = df["fonte"].value_counts().reset_index()
-    fc.columns = ["Fonte", "Qtd"]
-    fig_pie = go.Figure(go.Pie(
-        labels=fc["Fonte"], values=fc["Qtd"], hole=0.62,
-        marker_colors=[{"PNCP": AZUL, "Querido Diário": AZUL_MID, "BLL": AMARELO, "Licitações-e": VERDE}.get(f, MUTED) for f in fc["Fonte"]],
-        textinfo="label+percent", textfont=dict(size=10, family="Space Grotesk", color=TEXTO),
-        insidetextorientation="auto",
-    ))
-    fig_pie.update_layout(plot_bgcolor=SURFACE, paper_bgcolor=SURFACE, margin=dict(l=0,r=0,t=4,b=0), height=220,
-                          showlegend=False, font=dict(family="Space Grotesk", color=TEXTO),
-                          annotations=[dict(text=f"<b>{len(df)}</b>", x=0.5, y=0.5, font_size=20, showarrow=False,
-                                            font=dict(color=AZUL, family="Space Grotesk"))])
-    st.plotly_chart(fig_pie, use_container_width=True)
-
-st.divider()
-
-st.markdown(
-    f"<div style='font-size:11px;color:{MUTED};text-align:center;padding-bottom:1.5rem'>"
-    f"Ampla · {len(df):,} de {len(df_raw):,} editais · Cache 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    f"<div style='font-size:11px;color:{MUTED};text-align:center;padding-bottom:1rem'>"
+    f"Ampla · {total_fmt} de {len(df_raw):,} editais · Cache 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     f"</div>".replace(",", "."),
-    unsafe_allow_html=True,
-)
+    unsafe_allow_html=True)
