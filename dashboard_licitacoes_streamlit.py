@@ -3,7 +3,6 @@ Ampla — Radar de Licitações  v3
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import traceback
 import json
@@ -59,31 +58,28 @@ LOGO_SVG_BRANCA = '<img src="https://handson.tec.br/static/img/logo/logo-branca.
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-html, body, [class*="css"] {{ font-family: 'Space Grotesk', sans-serif !important; background-color: {BG} !important; color: {TEXTO}; }}
-.stApp {{ background-color: {BG} !important; }}
-.block-container {{ background-color: {BG} !important; padding-top: 1rem !important; max-width: 1400px; }}
-.stApp > header, [data-testid="stHeader"] {{ background: transparent !important; }}
-p, span, div, label {{ font-family: 'Space Grotesk', sans-serif !important; }}
-h1, h2, h3, h4 {{ font-family: 'Space Grotesk', sans-serif !important; font-weight: 700 !important; color: {TEXTO} !important; }}
-/* Todos stButton cinza (paginação) */
-.stButton > button {{ background: {SURFACE2} !important; color: {MUTED} !important; border: 1px solid {BORDA} !important; border-radius: 8px !important; font-weight: 500 !important; }}
-.stButton > button:hover {{ background: {BORDA} !important; color: {TEXTO} !important; opacity:1 !important; }}
-/* Download buttons azul */
-[data-testid="stDownloadButton"] button {{ background: {AZUL} !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; }}
-[data-testid="stDownloadButton"] button:hover {{ opacity: 0.82 !important; }}
-/* Recarregar azul via nested horizontal block */
-div[data-testid="stHorizontalBlock"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child .stButton > button {{ background: {AZUL} !important; color: white !important; border: none !important; font-weight: 600 !important; }}
-[data-baseweb="select"] {{ background: {SURFACE2} !important; border-radius: 8px !important; border: 1px solid {BORDA} !important; }}
-[data-baseweb="select"] * {{ color: {TEXTO} !important; }}
-[data-baseweb="popover"] ul {{ background: {SURFACE2} !important; }}
-[data-baseweb="popover"] li {{ background: {SURFACE2} !important; color: {TEXTO} !important; }}
-[data-baseweb="popover"] li:hover {{ background: {BORDA} !important; }}
-.stTextInput input, .stNumberInput input {{ background: {SURFACE2} !important; border: 1px solid {BORDA} !important; border-radius: 8px !important; color: {TEXTO} !important; }}
-.stSelectbox label, .stTextInput label, .stNumberInput label, .stCheckbox label {{ font-size: 10px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.1em !important; color: {MUTED} !important; }}
-::-webkit-scrollbar {{ width: 5px; height: 5px; }}
-::-webkit-scrollbar-track {{ background: {BG}; }}
-::-webkit-scrollbar-thumb {{ background: {BORDA}; border-radius: 3px; }}
-hr {{ border-color: {BORDA} !important; }}
+html, body, [class*="css"] {{ font-family:'Space Grotesk',sans-serif !important; background-color:{BG} !important; color:{TEXTO}; }}
+.stApp {{ background-color:{BG} !important; }}
+.block-container {{ background-color:{BG} !important; padding-top:1rem !important; max-width:1400px; }}
+.stApp > header, [data-testid="stHeader"] {{ background:transparent !important; }}
+p, span, div, label {{ font-family:'Space Grotesk',sans-serif !important; }}
+h1,h2,h3,h4 {{ font-family:'Space Grotesk',sans-serif !important; font-weight:700 !important; color:{TEXTO} !important; }}
+.stButton > button {{ background:{SURFACE2} !important; color:{MUTED} !important; border:1px solid {BORDA} !important; border-radius:8px !important; font-weight:500 !important; font-size:13px !important; }}
+.stButton > button:hover {{ background:{BORDA} !important; color:{TEXTO} !important; opacity:1 !important; }}
+[data-testid="stDownloadButton"] button {{ background:{AZUL} !important; color:white !important; border:none !important; border-radius:8px !important; font-weight:600 !important; }}
+[data-testid="stDownloadButton"] button:hover {{ opacity:0.82 !important; }}
+div[data-testid="stHorizontalBlock"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child .stButton > button {{ background:{AZUL} !important; color:white !important; border:none !important; font-weight:600 !important; }}
+[data-baseweb="select"] {{ background:{SURFACE2} !important; border-radius:8px !important; border:1px solid {BORDA} !important; }}
+[data-baseweb="select"] * {{ color:{TEXTO} !important; }}
+[data-baseweb="popover"] ul {{ background:{SURFACE2} !important; }}
+[data-baseweb="popover"] li {{ background:{SURFACE2} !important; color:{TEXTO} !important; }}
+[data-baseweb="popover"] li:hover {{ background:{BORDA} !important; }}
+.stTextInput input, .stNumberInput input {{ background:{SURFACE2} !important; border:1px solid {BORDA} !important; border-radius:8px !important; color:{TEXTO} !important; }}
+.stSelectbox label,.stTextInput label,.stNumberInput label,.stCheckbox label {{ font-size:10px !important; font-weight:700 !important; text-transform:uppercase !important; letter-spacing:0.1em !important; color:{MUTED} !important; }}
+::-webkit-scrollbar {{ width:5px; height:5px; }}
+::-webkit-scrollbar-track {{ background:{BG}; }}
+::-webkit-scrollbar-thumb {{ background:{BORDA}; border-radius:3px; }}
+hr {{ border-color:{BORDA} !important; }}
 .kpi-strip {{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }}
 .kpi-item {{ background:{SURFACE}; border:1px solid {BORDA}; border-top:3px solid {AZUL}; border-radius:12px; padding:14px 16px; flex:1; min-width:120px; text-align:center; }}
 .kpi-label {{ font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:{MUTED}; margin-bottom:6px; }}
@@ -108,20 +104,18 @@ hr {{ border-color: {BORDA} !important; }}
 def calcular_score(row):
     texto = f"{row.get('objeto','') or ''} {row.get('palavras_encontradas','') or ''}".lower()
     score = sum(w for kw, w in SCORE_WEIGHTS.items() if kw in texto)
-    mod = str(row.get("modalidade", "") or "").lower()
+    mod = str(row.get("modalidade","") or "").lower()
     if "concurso"       in mod: score += 15
     elif "concorrência" in mod: score += 8
     elif "pregão"       in mod: score += 5
-    if str(row.get("fonte", "")) == "PNCP": score += 5
+    if str(row.get("fonte","")) == "PNCP": score += 5
     try:
         if float(row.get("valor_estimado") or 0) > 0: score += 5
     except Exception:
         pass
     return min(int(score), 99)
 
-def score_color(s):
-    return VERDE if s >= 70 else AMARELO if s >= 50 else VERMELHO
-
+def score_color(s): return VERDE if s >= 70 else AMARELO if s >= 50 else VERMELHO
 def n_agencias(v):
     if v <= 0:         return "—"
     if v < 100_000:    return "1–2"
@@ -167,8 +161,7 @@ def excel_bytes(df_):
 def carregar_do_sheets(_gc, planilha_nome, aba_nome):
     ws    = _gc.open(planilha_nome).worksheet(aba_nome)
     dados = ws.get_all_records(default_blank="")
-    if not dados:
-        return pd.DataFrame()
+    if not dados: return pd.DataFrame()
     df = pd.DataFrame(dados).fillna("")
     df["score"]      = df.apply(calcular_score, axis=1)
     df["valor_num"]  = pd.to_numeric(df.get("valor_estimado",""), errors="coerce").fillna(0)
@@ -179,14 +172,12 @@ def carregar_do_sheets(_gc, planilha_nome, aba_nome):
 
 def conectar_sheets():
     if "gc" not in st.session_state:
-        if not GSPREAD_OK:
-            raise RuntimeError("gspread não instalado")
+        if not GSPREAD_OK: raise RuntimeError("gspread não instalado")
         if "credentials" in st.secrets:
             raw = dict(st.secrets["credentials"])
             raw["private_key"] = raw["private_key"].replace("\\n", "\n")
         elif CREDENTIALS_PATH.exists():
-            with open(CREDENTIALS_PATH) as f:
-                raw = json.load(f)
+            with open(CREDENTIALS_PATH) as f: raw = json.load(f)
         else:
             raise FileNotFoundError("Credenciais não encontradas.")
         st.session_state["gc"] = gspread.service_account_from_dict(raw)
@@ -210,14 +201,9 @@ if df_raw.empty:
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
-defaults = {
-    "f_busca": "", "f_uf": "Todos", "f_fonte": "Todas",
-    "f_mod": "Todas", "f_valor_min": 0, "f_ordem": "Score ↓",
-    "f_abertos": True, "pag": 1,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+for k, v in {"f_busca":"","f_uf":"Todos","f_fonte":"Todas","f_mod":"Todas",
+              "f_valor_min":0,"f_ordem":"Score ↓","f_abertos":True,"pag":1}.items():
+    if k not in st.session_state: st.session_state[k] = v
 
 
 # ── Navbar ────────────────────────────────────────────────────────────────────
@@ -254,12 +240,7 @@ st.divider()
 ufs    = ["Todos"] + sorted([u for u in df_raw["uf"].dropna().unique() if u])
 fontes = ["Todas"] + sorted([f for f in df_raw["fonte"].dropna().unique() if f])
 mods   = ["Todas"] + sorted([m for m in df_raw["modalidade"].dropna().unique() if m])
-ordem_opcoes = {
-    "Score ↓":  ("score",    False),
-    "Valor ↓":  ("valor_num", False),
-    "Prazo ↑":  ("data_enc", True),
-    "Pub. ↓":   ("data_pub", False),
-}
+ordem_opcoes = {"Score ↓":("score",False),"Valor ↓":("valor_num",False),"Prazo ↑":("data_enc",True),"Pub. ↓":("data_pub",False)}
 
 if st.session_state["f_uf"]    not in ufs:    st.session_state["f_uf"]    = "Todos"
 if st.session_state["f_fonte"] not in fontes: st.session_state["f_fonte"] = "Todas"
@@ -267,7 +248,7 @@ if st.session_state["f_mod"]   not in mods:   st.session_state["f_mod"]   = "Tod
 
 def reset_pag(): st.session_state["pag"] = 1
 
-f1, f2, f3, f4, f5, f6, f7 = st.columns([2, 1, 1, 1, 1, 1, 1])
+f1,f2,f3,f4,f5,f6,f7 = st.columns([2,1,1,1,1,1,1])
 with f1: st.text_input("🔍 Buscar", placeholder="objeto ou órgão...", key="f_busca", on_change=reset_pag)
 with f2: st.selectbox("📍 UF", ufs, index=ufs.index(st.session_state["f_uf"]), key="f_uf", on_change=reset_pag)
 with f3: st.selectbox("📰 Fonte", fontes, index=fontes.index(st.session_state["f_fonte"]), key="f_fonte", on_change=reset_pag)
@@ -283,28 +264,19 @@ st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
 
 # ── Aplicar filtros ───────────────────────────────────────────────────────────
 df = df_raw.copy()
-busca          = st.session_state["f_busca"]
-uf_sel         = st.session_state["f_uf"]
-fonte_sel      = st.session_state["f_fonte"]
-mod_sel        = st.session_state["f_mod"]
-valor_min      = st.session_state["f_valor_min"]
-ordem_sel      = st.session_state["f_ordem"]
-apenas_abertos = st.session_state["f_abertos"]
-
-if busca:
-    mask = (
-        df["objeto"].str.lower().str.contains(busca.lower(), na=False) |
-        df.get("orgao", pd.Series(dtype=str)).str.lower().str.contains(busca.lower(), na=False)
-    )
+if st.session_state["f_busca"]:
+    b = st.session_state["f_busca"].lower()
+    mask = (df["objeto"].str.lower().str.contains(b, na=False) |
+            df.get("orgao", pd.Series(dtype=str)).str.lower().str.contains(b, na=False))
     df = df[mask]
-if uf_sel    != "Todos":  df = df[df["uf"]        == uf_sel]
-if fonte_sel != "Todas":  df = df[df["fonte"]      == fonte_sel]
-if mod_sel   != "Todas":  df = df[df["modalidade"] == mod_sel]
-if valor_min >  0:        df = df[df["valor_num"]  >= valor_min]
-if apenas_abertos and "data_enc" in df.columns:
+if st.session_state["f_uf"]    != "Todos":  df = df[df["uf"]        == st.session_state["f_uf"]]
+if st.session_state["f_fonte"] != "Todas":  df = df[df["fonte"]      == st.session_state["f_fonte"]]
+if st.session_state["f_mod"]   != "Todas":  df = df[df["modalidade"] == st.session_state["f_mod"]]
+if st.session_state["f_valor_min"] > 0:     df = df[df["valor_num"]  >= st.session_state["f_valor_min"]]
+if st.session_state["f_abertos"] and "data_enc" in df.columns:
     df = df[df["data_enc"].isna() | (df["data_enc"] >= pd.Timestamp(date.today()))]
 
-ord_col, ord_asc = ordem_opcoes[ordem_sel]
+ord_col, ord_asc = ordem_opcoes[st.session_state["f_ordem"]]
 if ord_col in df.columns:
     df = df.sort_values(ord_col, ascending=ord_asc, na_position="last")
 df    = df.reset_index(drop=True)
@@ -321,7 +293,7 @@ if "data_enc" in df.columns:
 else:
     prazo_med = "—"
 
-total_fmt = f"{total:,}".replace(",", ".")
+total_fmt = f"{total:,}".replace(",",".")
 valor_fmt = f"R$ {valor_total/1e6:.1f}M" if valor_total > 0 else "—"
 
 st.markdown(f"""
@@ -335,12 +307,11 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── Paginação — cálculo ───────────────────────────────────────────────────────
+# ── Paginação — estado ────────────────────────────────────────────────────────
 POR_PAG = 20
 n_pags  = max(1, -(-total // POR_PAG))
 if st.session_state["pag"] > n_pags:
     st.session_state["pag"] = 1
-
 pag    = st.session_state["pag"]
 inicio = (pag - 1) * POR_PAG
 fim    = min(inicio + POR_PAG, total)
@@ -377,47 +348,24 @@ else:
         enc     = r.get("data_enc", None)
         enc_str = str(r.get("data_encerramento", "") or "")[:16]
         pub_str = str(r.get("data_publicacao", "") or "")[:10]
-
-        valor_disp = f"R$ {vn:,.0f}".replace(",", ".") if vn > 0 else "A definir"
+        valor_disp = f"R$ {vn:,.0f}".replace(",",".") if vn > 0 else "A definir"
         local_sub  = f"<br><span style='font-size:11px;color:{MUTED}'>{mun}</span>" if mun and mun.lower() != uf.lower() else ""
-        link_html  = (
-            f'<a href="{link}" target="_blank" style="background:{AZUL};color:white;'
-            f'border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;text-decoration:none">Ver edital →</a>'
-        ) if link else ""
+        link_html  = (f'<a href="{link}" target="_blank" style="background:{AZUL};color:white;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;text-decoration:none">Ver edital →</a>') if link else ""
 
         st.markdown(f"""
         <div class="lic-card" style="border-left:4px solid {cor}">
           <div class="card-priority">
-            <div class="card-field">
-              <div class="card-field-label">💰 Valor estimado</div>
-              <div class="card-field-value" style="color:{VERDE}">{valor_disp}</div>
-            </div>
-            <div class="card-field">
-              <div class="card-field-label">🏢 Agências</div>
-              <div class="card-field-value" style="color:{AZUL_MID}">{r.get("n_agencias","—")}</div>
-            </div>
-            <div class="card-field">
-              <div class="card-field-label">📍 Local</div>
-              <div class="card-field-value">{uf}{local_sub}</div>
-            </div>
-            <div class="card-field">
-              <div class="card-field-label">🏛️ Órgão contratante</div>
-              <div class="card-field-value" style="font-size:12px;font-weight:600">{orgao}</div>
-            </div>
-            <div class="card-field">
-              <div class="card-field-label">⏱ Prazo de entrega</div>
-              <div class="card-field-value">
-                {prazo_html(enc)}
-                <div style="font-size:11px;color:{MUTED};font-weight:400;margin-top:2px">{enc_str}</div>
-              </div>
-            </div>
+            <div class="card-field"><div class="card-field-label">💰 Valor estimado</div><div class="card-field-value" style="color:{VERDE}">{valor_disp}</div></div>
+            <div class="card-field"><div class="card-field-label">🏢 Agências</div><div class="card-field-value" style="color:{AZUL_MID}">{r.get("n_agencias","—")}</div></div>
+            <div class="card-field"><div class="card-field-label">📍 Local</div><div class="card-field-value">{uf}{local_sub}</div></div>
+            <div class="card-field"><div class="card-field-label">🏛️ Órgão contratante</div><div class="card-field-value" style="font-size:12px;font-weight:600">{orgao}</div></div>
+            <div class="card-field"><div class="card-field-label">⏱ Prazo de entrega</div><div class="card-field-value">{prazo_html(enc)}<div style="font-size:11px;color:{MUTED};font-weight:400;margin-top:2px">{enc_str}</div></div></div>
           </div>
           <div class="card-footer">
             <div class="card-objeto">{objeto}{"..." if len(objeto)==200 else ""}</div>
             <div class="card-badges">
               <span style="background:{cor}20;color:{cor};border:1px solid {cor}50;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700">{sc}</span>
-              <span class="badge">{mod}</span>
-              <span class="badge">{fonte}</span>
+              <span class="badge">{mod}</span><span class="badge">{fonte}</span>
               <span style="font-size:10px;color:{MUTED}">Pub. {pub_str}</span>
               {link_html}
             </div>
@@ -426,7 +374,7 @@ else:
         """, unsafe_allow_html=True)
 
 
-# ── Paginação ─────────────────────────────────────────────────────────────────
+# ── Paginação numérica ────────────────────────────────────────────────────────
 if n_pags > 1:
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
@@ -439,57 +387,43 @@ if n_pags > 1:
         itens.append(p)
         prev = p
 
-    def btn_pag(label, target, ativo=False, disabled=False):
-        base = "padding:7px 16px;font-size:13px;border-radius:8px;font-family:Space Grotesk,sans-serif;"
-        if disabled:
-            return f"<button disabled style='{base}background:{SURFACE2};color:{BORDA};border:1px solid {BORDA};cursor:not-allowed'>{label}</button>"
-        if ativo:
-            return f"<button style='{base}background:{AZUL};color:white;border:none;font-weight:700;cursor:default'>{label}</button>"
-        return (
-            f"<button onclick=\"window.parent.postMessage({{isStreamlitMessage:true,type:'streamlit:setComponentValue',value:{target}}},'*')\" "
-            f"style='{base}background:{SURFACE2};color:{MUTED};border:1px solid {BORDA};cursor:pointer;transition:background 0.15s' "
-            f"onmouseover=\"this.style.background='{BORDA}';this.style.color='{TEXTO}'\" "
-            f"onmouseout=\"this.style.background='{SURFACE2}';this.style.color='{MUTED}'\">{label}</button>"
-        )
-
-    partes = [btn_pag("←", pag-1, disabled=(pag<=1))]
-    for item in itens:
-        if item is None:
-            partes.append(f"<span style='color:{MUTED};padding:0 2px;font-size:13px'>…</span>")
-        elif item == pag:
-            partes.append(btn_pag(str(item), item, ativo=True))
-        else:
-            partes.append(btn_pag(str(item), item))
-    partes.append(btn_pag("→", pag+1, disabled=(pag>=n_pags)))
-
-    html_pag = f"""
-    <style>
-      * {{ box-sizing:border-box; margin:0; padding:0; }}
-      body {{ background:transparent; }}
-    </style>
-    <div style='display:flex;gap:8px;align-items:center;justify-content:center;padding:2px 0'>
-      {''.join(partes)}
-    </div>
-    """
-
-    _, col_pag, _ = st.columns([1, 4, 1])
+    _, col_pag, _ = st.columns([2, len(itens)+2, 2])
     with col_pag:
-        clicked = components.html(html_pag, height=46)
+        pcols = st.columns([0.7] + [0.6] * len(itens) + [0.7])
 
-    if clicked is not None and isinstance(clicked, (int, float)):
-        nova = int(clicked)
-        if 1 <= nova <= n_pags and nova != pag:
-            st.session_state["pag"] = nova
-            st.rerun()
+        with pcols[0]:
+            if st.button("←", key="prev", disabled=(pag <= 1), use_container_width=True):
+                st.session_state["pag"] = pag - 1
+                st.rerun()
+
+        for i, item in enumerate(itens):
+            with pcols[i + 1]:
+                if item is None:
+                    st.markdown(f"<div style='text-align:center;color:{MUTED};padding-top:8px'>…</div>", unsafe_allow_html=True)
+                elif item == pag:
+                    st.markdown(
+                        f"<div style='text-align:center;background:{AZUL};color:white;"
+                        f"border-radius:8px;padding:7px 0;font-weight:700;font-size:13px'>{item}</div>",
+                        unsafe_allow_html=True)
+                else:
+                    if st.button(str(item), key=f"p{item}", use_container_width=True):
+                        st.session_state["pag"] = item
+                        st.rerun()
+
+        with pcols[-1]:
+            if st.button("→", key="next", disabled=(pag >= n_pags), use_container_width=True):
+                st.session_state["pag"] = pag + 1
+                st.rerun()
 
     st.markdown(
         f"<div style='text-align:center;font-size:11px;color:{MUTED};margin-top:4px'>"
         f"Página {pag} de {n_pags} · {total_fmt} resultados</div>",
         unsafe_allow_html=True)
 
+
 st.divider()
 st.markdown(
     f"<div style='font-size:11px;color:{MUTED};text-align:center;padding-bottom:1rem'>"
     f"Ampla · {total_fmt} de {len(df_raw):,} editais · Cache 5 min · {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-    f"</div>".replace(",", "."),
+    f"</div>".replace(",","."),
     unsafe_allow_html=True)
